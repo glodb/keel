@@ -297,21 +297,6 @@ func (c *config) validateSecurityConfig() ConfigValidationErrors {
 		})
 	}
 
-	// Validate SessionSecret
-	if strings.TrimSpace(c.SessionSecret) == "" {
-		errors = append(errors, ConfigValidationError{
-			Field:   "SessionSecret",
-			Value:   "[REDACTED]",
-			Message: "session secret is required for security",
-		})
-	} else if len(c.SessionSecret) < 16 {
-		errors = append(errors, ConfigValidationError{
-			Field:   "SessionSecret",
-			Value:   "[REDACTED]",
-			Message: "session secret must be at least 16 characters for security",
-		})
-	}
-
 	// Validate secure cookie settings if enabled
 	if c.UseSecureCookie {
 		if strings.TrimSpace(c.SecureCookieHash) == "" {

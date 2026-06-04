@@ -12,6 +12,16 @@ import (
 	"github.com/glodb/keel/settings/openapi"
 )
 
+type factoryEntry struct {
+	dbType  basetypes.DbType
+	factory func() baseinterfaces.Controller
+}
+
+var (
+	pendingFactories []factoryEntry
+	factoryMu        sync.Mutex
+)
+
 var getInstance = sync.OnceValue(func() *controllersObject {
 	instance := &controllersObject{}
 	instance.controllers = make(map[basetypes.DbType]map[string]baseinterfaces.Controller)
@@ -20,7 +30,6 @@ var getInstance = sync.OnceValue(func() *controllersObject {
 	instance.controllers[basetypes.PSQL] = make(map[string]baseinterfaces.Controller)
 	instance.mutex = sync.Mutex{}
 	instance.helper = openapi.NewControllerHelper()
-
 	return instance
 })
 
@@ -28,8 +37,23 @@ func Controllers() *controllersObject {
 	return getInstance()
 }
 
+// Register stores the factory — initialization is deferred until InitializeControllers().
 func Register(dbType basetypes.DbType, name string, factory func() baseinterfaces.Controller) {
-	Controllers().Register(dbType, name, factory())
+	factoryMu.Lock()
+	defer factoryMu.Unlock()
+	pendingFactories = append(pendingFactories, factoryEntry{dbType: dbType, factory: factory})
+}
+
+// InitializeControllers initializes all registered controllers. Call after Boot().
+func InitializeControllers() {
+	factoryMu.Lock()
+	factories := pendingFactories
+	pendingFactories = nil
+	factoryMu.Unlock()
+
+	for _, e := range factories {
+		Controllers().initialize(e.dbType, e.factory())
+	}
 }
 
 // Controllers struct
@@ -39,19 +63,18 @@ type controllersObject struct {
 	helper      *openapi.ControllerHelper
 }
 
-// GetController createController is a factory to return the appropriate controller
+// GetController returns an already-initialized controller.
 func (c *controllersObject) GetController(dbType basetypes.DbType, controllerType string) (baseinterfaces.Controller, error) {
 	if _, ok := c.controllers[dbType][controllerType]; ok {
 		return c.controllers[dbType][controllerType], nil
-	} else {
-		return nil, errors.New("controller not found")
 	}
+	return nil, errors.New("controller not found")
 }
-func (c *controllersObject) Register(dbType basetypes.DbType, controllerName string, object baseinterfaces.Controller) {
-	if _, ok := c.controllers[dbType][controllerName]; ok {
-		return
-	}
-	c.controllers[dbType][controllerName] = object
+
+func (c *controllersObject) initialize(dbType basetypes.DbType, object baseinterfaces.Controller) {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+
 	funcs, _ := basefunctions.BaseFunctions().GetFunctions(dbType, object.GetDBName())
 	object.SetDependencies(*funcs)
 	object.Initialize()
@@ -60,7 +83,5 @@ func (c *controllersObject) Register(dbType basetypes.DbType, controllerName str
 		object.RegisterApis(object.GetApisMap())
 	}
 
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
-	c.controllers[dbType][controllerName] = object
+	c.controllers[dbType][string(object.GetDBName())] = object
 }

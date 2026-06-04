@@ -11,6 +11,7 @@ import (
 	"time"
 
 	httpHandler "github.com/glodb/keel/httpHandler"
+	"github.com/glodb/keel/httpHandler/controllers"
 	"github.com/glodb/keel/middlewares/basemiddlewares"
 	"github.com/glodb/keel/settings/configmanager"
 	"github.com/glodb/keel/settings/logger"
@@ -33,8 +34,6 @@ func GetInstance() *Service {
 }
 
 func (s *Service) Run(serviceName string, serviceType ServiceType, subscriber serviceutils.SubscriptionInterface, middlewares map[string][]basemiddlewares.Middleware) error {
-
-	defer panicrecovery.RecoverFromPanic(serviceName)
 
 	logger.Log().Info("SSOService starting...")
 
@@ -59,6 +58,7 @@ func (s *Service) Run(serviceName string, serviceType ServiceType, subscriber se
 
 		func() {
 			defer panicrecovery.RecoverFromPanic("SSOService.RegisterControllers")
+			controllers.InitializeControllers()
 		}()
 
 		panicrecovery.SafeGo(func() {

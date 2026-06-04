@@ -11,7 +11,6 @@ import (
 	"github.com/glodb/keel/settings/configmanager"
 	"github.com/glodb/keel/settings/logger"
 	"github.com/glodb/keel/settings/metrics"
-
 	"github.com/gomodule/redigo/redis"
 	"golang.org/x/sync/semaphore"
 )
