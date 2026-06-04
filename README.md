@@ -2,6 +2,8 @@
 
 keel is a Go microservice framework that provides opinionated, batteries-included infrastructure for building production microservices: HTTP routing, NATS messaging, database access (Mongo/MySQL/PostgreSQL), Redis caching, search (Meilisearch), notifications (FCM/email/SMS/WhatsApp), distributed tracing, metrics, circuit breakers, and more.
 
+v0.1 — opinionated, batteries-included framework. Modular architecture planned for v0.2.
+
 ## Import
 
 ```bash
