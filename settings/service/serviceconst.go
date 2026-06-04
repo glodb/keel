@@ -6,4 +6,5 @@ const (
 	SERVICE_TYPE_HTTP   = ServiceType(1)
 	SERVICE_TYPE_TCP    = ServiceType(2)
 	SERVICE_TYPE_SIMPLE = ServiceType(4)
+	SERVICE_TYPE_SOCKET = ServiceType(8)
 )

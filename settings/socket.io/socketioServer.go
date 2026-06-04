@@ -40,6 +40,9 @@ type RequestHandler struct {
 	servedRequests   int
 }
 
+// Listen starts the socket.io server on the configured address and blocks until
+// the underlying HTTP server exits. It uses its own http.ServeMux so it does
+// not pollute http.DefaultServeMux or conflict with the Gin HTTP server.
 func (s *SocketIO) Listen() {
 	server := socketio.NewServer(&engineio.Options{
 		Transports: []transport.Transport{
@@ -53,18 +56,29 @@ func (s *SocketIO) Listen() {
 	})
 
 	s.server = server
-
 	s.registerTopics(s.server)
 	go s.server.Serve()
-	defer func() {
+	defer s.server.Close()
 
+	mux := http.NewServeMux()
+	mux.Handle("/socket.io/", s.server)
+
+	srv := &http.Server{
+		Addr:    s.address,
+		Handler: mux,
+	}
+
+	logger.Log().Info("socket.io server listening", logger.StringField("address", s.address))
+	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		logger.Log().Error("socket.io server error", logger.ErrorField("error", err))
+	}
+}
+
+// Shutdown gracefully stops the socket.io server.
+func (s *SocketIO) Shutdown() {
+	if s.server != nil {
 		s.server.Close()
-	}()
-
-	http.Handle("/socket.io/", s.server)
-	http.Handle("/", http.FileServer(http.Dir("./asset")))
-	// srv := &http.Server{Addr: s.address, Handler: RecoverWrap(RequestServerHandler())}
-	http.ListenAndServe(s.address, nil)
+	}
 }
 
 func (h RequestHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -188,8 +202,7 @@ func (s *SocketIO) JoinRoom(c *SocketSession, roomName string) {
 	c.Conn().Join(roomName)
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
-	set := s.socketUsers[c.Conn().ID()]
-	if set == nil {
+	if s.socketUsers[c.UserId] == nil {
 		s.socketUsers[c.UserId] = utilsdatatypes.NewSet[*SocketSession]()
 	}
 	s.socketUsers[c.UserId].Add(c)

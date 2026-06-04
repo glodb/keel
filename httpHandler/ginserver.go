@@ -48,7 +48,7 @@ func (u *GINServer) GetEngine() *gin.Engine {
 // HandleBlank handles the root route and returns a JSON response.
 func (u *GINServer) HandleBlank() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		c.JSON(http.StatusOK, map[string]interface{}{"msg": "Welcome to gpsina gin api"}) // Return a welcome message
+		c.JSON(http.StatusOK, map[string]interface{}{"msg": "Welcome to keel default route"}) // Return a welcome message
 	}
 }
 
@@ -155,4 +155,3 @@ func (u *GINServer) Start() error {
 	logger.Log().Debug("Server exited")
 	return nil
 }
-

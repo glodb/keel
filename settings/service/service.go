@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"os"
 	"os/signal"
@@ -16,6 +17,7 @@ import (
 	"github.com/glodb/keel/settings/configmanager"
 	"github.com/glodb/keel/settings/logger"
 	"github.com/glodb/keel/settings/panicrecovery"
+	socketio "github.com/glodb/keel/settings/socket.io"
 	"github.com/glodb/keel/settings/serviceutils"
 	"github.com/glodb/keel/settings/topics"
 
@@ -23,6 +25,7 @@ import (
 )
 
 type Service struct {
+	socketServer *socketio.SocketIO
 }
 
 var getInstance = sync.OnceValue(func() *Service {
@@ -33,13 +36,19 @@ func GetInstance() *Service {
 	return getInstance()
 }
 
+// GetSocket returns the socket.io server if it was started with SERVICE_TYPE_SOCKET,
+// or nil otherwise. Consumers use this to register event callbacks after Run returns.
+func (s *Service) GetSocket() *socketio.SocketIO {
+	return s.socketServer
+}
+
 func (s *Service) Run(serviceName string, serviceType ServiceType, subscriber serviceutils.SubscriptionInterface, middlewares map[string][]basemiddlewares.Middleware) error {
 
-	logger.Log().Info("SSOService starting...")
+	logger.Log().Info(fmt.Sprintf("%s starting...", serviceName))
 
 	err := panicrecovery.InitializerWithRecovery(func() error {
 		return s.registerSubscriber(subscriber)
-	}, "SSOService.AssignSubscriber")
+	}, fmt.Sprintf("%s.AssignSubscriber", serviceName))
 	if err != nil {
 		logger.Log().Error("Failed to assign subscriber", logger.ErrorField("error", err))
 		return err
@@ -47,7 +56,7 @@ func (s *Service) Run(serviceName string, serviceType ServiceType, subscriber se
 
 	panicrecovery.SafeGo(func() {
 		serviceutils.GetInstance().RunService()
-	}, "SSOService.serviceutils")
+	}, fmt.Sprintf("%s.serviceutils", serviceName))
 
 	if serviceType&SERVICE_TYPE_HTTP != 0 {
 		httpHandler.Server().Setup(middlewares)
@@ -57,7 +66,7 @@ func (s *Service) Run(serviceName string, serviceType ServiceType, subscriber se
 		}
 
 		func() {
-			defer panicrecovery.RecoverFromPanic("SSOService.RegisterControllers")
+			defer panicrecovery.RecoverFromPanic(fmt.Sprintf("%s.RegisterControllers", serviceName))
 			controllers.InitializeControllers()
 		}()
 
@@ -66,13 +75,26 @@ func (s *Service) Run(serviceName string, serviceType ServiceType, subscriber se
 			if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 				logger.Log().Error("Error starting server", logger.ErrorField("error", err))
 			}
-		}, "SSOService HTTP server")
+		}, fmt.Sprintf("%s HTTP server", serviceName))
 
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		if err := srv.Shutdown(ctx); err != nil {
 			logger.Log().Error("Server forced to shutdown", logger.ErrorField("error", err))
 		}
 		defer cancel()
+	}
+
+	if serviceType&SERVICE_TYPE_SOCKET != 0 {
+		addr := configmanager.GetInstance().SocketAddress
+		if addr == "" {
+			logger.Log().Error("SERVICE_TYPE_SOCKET requested but socketAddress is not set in config; socket server not started")
+		} else {
+			s.socketServer = socketio.New(addr)
+			panicrecovery.SafeGo(func() {
+				logger.Log().Info("Starting socket.io server", logger.StringField("address", addr))
+				s.socketServer.Listen()
+			}, fmt.Sprintf("%s socket.io server", serviceName))
+		}
 	}
 
 	if serviceType&SERVICE_TYPE_SIMPLE != 0 {

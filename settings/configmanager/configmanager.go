@@ -107,6 +107,9 @@ type config struct {
 	UsePprof       bool   `json:"usePprof"`
 	PprofAddress   string `json:"pprofAddress"`
 
+	// Socket.IO
+	SocketAddress string `json:"socketAddress"` // e.g. ":9000"; empty means socket server is disabled
+
 	// Versioning (keel uses in tracing/openapi)
 	ServiceVersion genericmodels.Version `json:"serviceVersion"`
 
