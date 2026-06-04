@@ -9,7 +9,6 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	mrand "math/rand"
@@ -27,11 +26,9 @@ import (
 	"github.com/glodb/keel/settings/logger"
 	"github.com/glodb/keel/settings/utilsdatatypes"
 
-	"github.com/golang-jwt/jwt/v5"
 	"github.com/rs/xid"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
-	"golang.org/x/crypto/bcrypt"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 )
@@ -136,37 +133,6 @@ func (u *Utils) CopyMap(m map[string]*utilsdatatypes.Queue) map[string][]interfa
 	return cp
 }
 
-func (u *Utils) IsTokenValid(tokenString string) (bool, error) {
-
-	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
-		// Provide the key for token validation
-		return []byte(configmanager.GetInstance().SessionSecret), nil
-	})
-
-	if err != nil {
-		return false, err
-	}
-
-	// Check if the token is valid
-	if token.Valid {
-		// Token is valid, check the expiration time
-		if claims, ok := token.Claims.(jwt.MapClaims); ok {
-			expirationTime := time.Unix(int64(claims["exp"].(float64)), 0)
-			currentTime := time.Now()
-
-			if expirationTime.After(currentTime) {
-				return true, nil
-			} else {
-				return false, errors.New("token has expired")
-			}
-		} else {
-			return false, errors.New("error extracting claims")
-		}
-	} else {
-		return false, errors.New("error parsing token")
-	}
-}
-
 func (u *Utils) ToBsonDict(v interface{}) (doc *bson.D, err error) {
 	data, err := bson.Marshal(v)
 	if err != nil {
@@ -177,99 +143,11 @@ func (u *Utils) ToBsonDict(v interface{}) (doc *bson.D, err error) {
 	return
 }
 
-// GenerateHashedPassword generates a hashed password from the given plaintext password.
-func (u *Utils) GenerateHashedPassword(password string) (string, error) {
-	// Generate the hashed password using bcrypt with default cost.
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-	if err != nil {
-		return "", err
-	}
-	return string(hashedPassword), nil
-}
-
-func (u *Utils) GetStartOfDay(t int64) int64 {
-	t = t - (t % (24 * 60 * 60))
-	return t
-}
-
-func (u *Utils) GetSNearestThirtyMinutes(t int64) int64 {
-
-	minutes := t % (30 * 60)
-	if minutes > 0 {
-		t = t - minutes
-	}
-
-	return t
-}
-
-func (u *Utils) GetStartOfMonth(t time.Time) int64 {
-	year, month, _ := t.Date()
-	location := t.Location()
-	startOfMonth := time.Date(year, month, 1, 0, 0, 0, 0, location)
-	return startOfMonth.Unix()
-}
-
-func (u *Utils) RemoveAsterik(arr []string) []string {
-	index := -1
-	for i, val := range arr {
-		if val == "*" {
-			index = i
-			break
-		}
-	}
-
-	// If "*" was found, remove it from the array
-	if index != -1 {
-		arr = append(arr[:index], arr[index+1:]...)
-	}
-	return arr
-}
-
-func (u *Utils) RemoveStringFromArray(arr []string, str string) []string {
-	index := -1
-	for i, val := range arr {
-		if val == str {
-			index = i
-			break
-		}
-	}
-
-	// If string was found, remove it from the array
-	if index != -1 {
-		arr = append(arr[:index], arr[index+1:]...)
-	}
-	return arr
-}
-
 func (u *Utils) NewUpdateOneModel(filter, update customtypes.M, insert bool) mongo.WriteModel {
 	return mongo.NewUpdateOneModel().
 		SetFilter(filter).
 		SetUpdate(update).
 		SetUpsert(insert)
-}
-
-func (u *Utils) ValidateMeasurementTime(timestamps ...int64) bool {
-	currentTime := time.Now().UTC().Unix()
-
-	currentTime += 12 * 60 * 60 //In order to support GMT, we allow to add readings for GMT+12
-
-	// Helper function to check if a timestamp is valid
-	isValid := func(ts int64) bool {
-		logger.Log().Debug("ValidateMeasurementTime", logger.Int64Field("current_time", currentTime), logger.Int64Field("ts", ts))
-		return ts != 0 && ts <= currentTime
-	}
-	// Map of validation functions for different cases
-	validators := map[int]func([]int64) bool{
-		2: func(ts []int64) bool {
-			return isValid(ts[0]) && isValid(ts[1]) && ts[0] > ts[1]
-		},
-	}
-	// Get the appropriate validator based on the number of timestamps
-	if validator, exists := validators[len(timestamps)]; exists {
-		return validator(timestamps)
-	}
-	// Invalid number of arguments
-	return false
 }
 
 func (u *Utils) Encrypt(plainText, key string) (string, error) {
