@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"net/http"
 	_ "net/http/pprof" // Import pprof for profiling
-	"os"
 	"runtime/debug"
 	"time"
 
@@ -18,28 +17,25 @@ import (
 	"github.com/glodb/keel/settings/tracing"
 )
 
-func Boot() {
-	// CRITICAL: Global panic recovery to prevent silent crashes
+// Boot initialises and runs the named service. env is the deployment environment
+// (e.g. "DEV", "PROD") and service is the registered service name (e.g. "SSOSERVICE").
+// It returns an error on any fatal startup failure; the caller decides how to handle it.
+func Boot(env, service string) (err error) {
+	configmanager.Configure(env, service)
+
+	// Recover from panics in the startup/run path and convert to a returned error.
 	defer func() {
 		if r := recover(); r != nil {
 			stack := string(debug.Stack())
-
-			// Try to log if logger is initialized
 			if logger.Log() != nil {
-				logger.Log().Error("FATAL PANIC IN MAIN - SERVICE CRASHED",
+				logger.Log().Error("FATAL PANIC IN BOOT - SERVICE CRASHED",
 					logger.AnyField("panic", r),
 					logger.StringField("stack_trace", stack),
 					logger.StringField("service", configmanager.GetInstance().ClassName),
 					logger.StringField("timestamp", time.Now().Format(time.RFC3339)))
-			} else {
-				// Fallback to stderr if logger not available
-				_, _ = os.Stderr.WriteString(fmt.Sprintf("\n\n!!! FATAL PANIC IN MAIN !!!\nService: %s\nPanic: %v\nStack:\n%s\n",
-					configmanager.GetInstance().ClassName, r, stack))
 			}
-
-			// Give logger time to flush
 			time.Sleep(500 * time.Millisecond)
-			os.Exit(1)
+			err = fmt.Errorf("fatal panic: %v", r)
 		}
 	}()
 
@@ -50,7 +46,7 @@ func Boot() {
 
 	logger.LogInit(configmanager.GetInstance())
 
-	// Initialize Meilisearch if configured
+	// Initialize Meilisearch if configured.
 	if configmanager.GetInstance().MeilisearchConfig.Host != "" {
 		meiliClient := meilisearch.GetInstance()
 		if meiliClient != nil {
@@ -59,7 +55,7 @@ func Boot() {
 		}
 	}
 
-	// Initialize tracing explicitly with panic recovery
+	// Initialize tracing with panic recovery.
 	panicrecovery.SafeGo(func() {
 		tracing.GetInstance()
 	}, "tracing initialization")
@@ -75,43 +71,38 @@ func Boot() {
 
 	topics.GetInstance().Register()
 
-	// Wrap service initialization with panic recovery
 	var base interface{}
-	err := panicrecovery.InitializerWithRecovery(func() error {
-		var initErr error
-		base, initErr = servicehandler.GetInstance().InitializeService(configmanager.GetInstance().ClassName)
-		return initErr
+	initErr := panicrecovery.InitializerWithRecovery(func() error {
+		var e error
+		base, e = servicehandler.GetInstance().InitializeService(configmanager.GetInstance().ClassName)
+		return e
 	}, "service initialization")
 
-	if err != nil {
-		logger.Log().Error("Error in initializing Service", logger.ErrorField("error", err))
-		os.Exit(1)
+	if initErr != nil {
+		logger.Log().Error("Error in initializing Service", logger.ErrorField("error", initErr))
+		return fmt.Errorf("service initialization failed: %w", initErr)
 	}
 
-	if base != nil {
-		// Run service with panic recovery
-		func() {
-			defer panicrecovery.RecoverFromPanic("service run")
-			if runnable, ok := base.(interface{ Run() error }); ok {
-				if runErr := runnable.Run(); runErr != nil {
-					logger.Log().Error("Error in running Service", logger.ErrorField("error", runErr))
-				}
-			}
-		}()
-	} else {
+	if base == nil {
 		logger.Log().Error("Error in running Service - base is nil")
-		os.Exit(1)
+		return fmt.Errorf("service initialization returned nil for %q", configmanager.GetInstance().ClassName)
 	}
 
-	if err != nil {
-		logger.Log().Error("Error in running Service", logger.ErrorField("error", err))
-	}
-
-	// Stop service with panic recovery
-	if base != nil {
-		if stoppable, ok := base.(interface{ Stop() }); ok {
-			defer panicrecovery.RecoverFromPanic("service stop")
-			stoppable.Stop()
+	// Run service with panic recovery.
+	func() {
+		defer panicrecovery.RecoverFromPanic("service run")
+		if runnable, ok := base.(interface{ Run() error }); ok {
+			if runErr := runnable.Run(); runErr != nil {
+				logger.Log().Error("Error in running Service", logger.ErrorField("error", runErr))
+			}
 		}
+	}()
+
+	// Stop service with panic recovery.
+	if stoppable, ok := base.(interface{ Stop() }); ok {
+		defer panicrecovery.RecoverFromPanic("service stop")
+		stoppable.Stop()
 	}
+
+	return nil
 }

@@ -2,9 +2,8 @@ package rpcreplymodels
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
-
-	"github.com/glodb/keel/httpHandler/responses"
 )
 
 type BaseReply struct {
@@ -20,7 +19,10 @@ func (br *BaseReply) IsError() bool {
 	return false
 }
 func (br *BaseReply) GetError() error {
-	return errors.New(responses.GetInstance().GetResponse(br.Code)["message"].(string))
+	if br.Error != "" {
+		return errors.New(br.Error)
+	}
+	return fmt.Errorf("error code %d", br.Code)
 }
 
 func (br *BaseReply) GetCode() int {

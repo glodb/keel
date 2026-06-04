@@ -10,7 +10,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/glodb/keel/app/models/dbmodels/keelmodels"
 	"github.com/glodb/keel/app/models/genericmodels"
 	"github.com/glodb/keel/database/baseconnections"
 	"github.com/glodb/keel/database/basetypes"
@@ -428,13 +427,13 @@ func (u *PSqlFunctions) FindOneAndUpdate(ctx context.Context, controller baseint
 func (u *PSqlFunctions) DeleteOne(ctx context.Context, controller baseinterfaces.Controller, query customtypes.M) error {
 	return errors.New("unimplemented for reational db")
 }
-func (u *PSqlFunctions) SoftDeleteOne(ctx context.Context, controller baseinterfaces.Controller, query customtypes.M, deletedBy keelmodels.Session) error {
+func (u *PSqlFunctions) SoftDeleteOne(ctx context.Context, controller baseinterfaces.Controller, query customtypes.M, deletedByUserId string, deletedByUserName string) error {
 	return errors.New("unimplemented for reational db")
 }
 func (u *PSqlFunctions) DeleteMany(ctx context.Context, controller baseinterfaces.Controller, query customtypes.M) error {
 	return errors.New("unimplemented for reational db")
 }
-func (u *PSqlFunctions) SoftDeleteMany(ctx context.Context, controller baseinterfaces.Controller, query customtypes.M, deletedBy keelmodels.Session) error {
+func (u *PSqlFunctions) SoftDeleteMany(ctx context.Context, controller baseinterfaces.Controller, query customtypes.M, deletedByUserId string, deletedByUserName string) error {
 	return errors.New("unimplemented for reational db")
 }
 func (u *PSqlFunctions) BulkWrite(ctx context.Context, controller baseinterfaces.Controller, writers []mongo.WriteModel) error {

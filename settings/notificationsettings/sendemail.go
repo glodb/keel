@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/glodb/keel/app/models/dbmodels/notificationmodels"
+	"github.com/glodb/keel/app/models/notificationmodels"
 	"github.com/glodb/keel/settings/configmanager"
 	"github.com/glodb/keel/settings/logger"
 
@@ -66,7 +66,7 @@ func (u *EmailSender) reconnect() error {
 	return nil
 }
 
-func (u *EmailSender) Send(notifications []notificationmodels.NotiReponseModels) error {
+func (u *EmailSender) Send(notifications []notificationmodels.NotiResponseModels) error {
 	u.semaphore.Acquire(context.Background(), 1)
 	defer u.semaphore.Release(1)
 
@@ -101,7 +101,7 @@ func (u *EmailSender) Send(notifications []notificationmodels.NotiReponseModels)
 	return nil
 }
 
-func (u *EmailSender) MultiCastMessage(notification notificationmodels.NotiReponseModels) error {
+func (u *EmailSender) MultiCastMessage(notification notificationmodels.NotiResponseModels) error {
 	u.semaphore.Acquire(context.Background(), 1)
 	defer u.semaphore.Release(1)
 

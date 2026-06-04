@@ -7,7 +7,6 @@ import (
 	"math"
 	"time"
 
-	"github.com/glodb/keel/app/models/dbmodels/keelmodels"
 	"github.com/glodb/keel/app/models/genericmodels"
 	"github.com/glodb/keel/database/baseconnections"
 	"github.com/glodb/keel/database/basetypes"
@@ -225,7 +224,7 @@ func (u *MongoDBFunctions) FindOneAndDelete(ctx context.Context, controller base
 	return err
 }
 
-func (u *MongoDBFunctions) SoftDeleteOne(ctx context.Context, controller baseinterfaces.Controller, query customtypes.M, deletedBy keelmodels.Session) error {
+func (u *MongoDBFunctions) SoftDeleteOne(ctx context.Context, controller baseinterfaces.Controller, query customtypes.M, deletedByUserId string, deletedByUserName string) error {
 	logger.Log().Debug("MongoDB-SoftDeleteOne-Start", logger.StringField("collection", string(controller.GetCollectionName())), logger.StringField("db", string(controller.GetDBName())), logger.AnyField("query", query))
 	start := time.Now()
 	conn := baseconnections.DBConnection().GetConnection(basetypes.MONGO).GetDB(basetypes.MONGO).(*mongo.Client)
@@ -238,7 +237,7 @@ func (u *MongoDBFunctions) SoftDeleteOne(ctx context.Context, controller baseint
 	}
 
 	deletedData[configmanager.GetInstance().SoftDeletionKey] = time.Now()
-	deletedData[configmanager.GetInstance().DeletedByKey] = deletedBy.UserId
+	deletedData[configmanager.GetInstance().DeletedByKey] = deletedByUserId
 	_, err = conn.Database(string(controller.GetDBName())).Collection(string(controller.GetCollectionName())+configmanager.GetInstance().SoftDeleteCollectionPrefix).InsertOne(ctx, deletedData)
 
 	if err != nil {
@@ -275,7 +274,7 @@ func (u *MongoDBFunctions) DeleteMany(ctx context.Context, controller baseinterf
 	return err
 }
 
-func (u *MongoDBFunctions) SoftDeleteMany(ctx context.Context, controller baseinterfaces.Controller, query customtypes.M, deletedBy keelmodels.Session) error {
+func (u *MongoDBFunctions) SoftDeleteMany(ctx context.Context, controller baseinterfaces.Controller, query customtypes.M, deletedByUserId string, deletedByUserName string) error {
 	logger.Log().Debug("MongoDB-SoftDeleteMany-Start", logger.StringField("collection", string(controller.GetCollectionName())), logger.StringField("db", string(controller.GetDBName())), logger.AnyField("query", query))
 	start := time.Now()
 	conn := baseconnections.DBConnection().GetConnection(basetypes.MONGO).GetDB(basetypes.MONGO).(*mongo.Client)
@@ -294,7 +293,7 @@ func (u *MongoDBFunctions) SoftDeleteMany(ctx context.Context, controller basein
 			return err
 		}
 		document[configmanager.GetInstance().SoftDeletionKey] = time.Now()
-		document[configmanager.GetInstance().DeletedByKey] = deletedBy.UserId
+		document[configmanager.GetInstance().DeletedByKey] = deletedByUserId
 		documentsToInsert = append(documentsToInsert, document)
 	}
 	if _, err := conn.Database(string(controller.GetDBName())).Collection(string(controller.GetCollectionName())+configmanager.GetInstance().SoftDeleteCollectionPrefix).InsertMany(context.Background(), documentsToInsert); err != nil {

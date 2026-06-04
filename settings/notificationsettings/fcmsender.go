@@ -8,7 +8,7 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/glodb/keel/app/models/dbmodels/notificationmodels"
+	"github.com/glodb/keel/app/models/notificationmodels"
 	"github.com/glodb/keel/settings/configmanager"
 	"github.com/glodb/keel/settings/logger"
 	"github.com/glodb/keel/settings/utils"
@@ -71,7 +71,7 @@ func (u *FCMSender) Init(semaphore *semaphore.Weighted) (bool, error) {
 	return true, nil
 }
 
-func (u *FCMSender) SendMesageToDestinations(notification notificationmodels.NotiReponseModels) {
+func (u *FCMSender) SendMesageToDestinations(notification notificationmodels.NotiResponseModels) {
 	for _, destination := range notification.Destination {
 
 		go func(destination notificationmodels.NotificationData) {
@@ -96,14 +96,6 @@ func (u *FCMSender) SendMesageToDestinations(notification notificationmodels.Not
 				data["callUUID"] = destination.CallId
 				data["displayName"] = destination.CallerName
 				data["callerImage"] = destination.CallerImage
-			}
-
-			// Add chat message data if provided
-			if destination.ChatData != nil {
-				mapData := destination.ChatData.GetMapData()
-				for key, value := range mapData {
-					data[key] = value
-				}
 			}
 
 			u.semaphore.Acquire(context.Background(), 1)
@@ -235,7 +227,7 @@ func (u *FCMSender) SendMesageToDestinations(notification notificationmodels.Not
 	}
 }
 
-func (u *FCMSender) Send(notifications []notificationmodels.NotiReponseModels) error {
+func (u *FCMSender) Send(notifications []notificationmodels.NotiResponseModels) error {
 
 	for _, notification := range notifications {
 		u.SendMesageToDestinations(notification)
@@ -244,8 +236,8 @@ func (u *FCMSender) Send(notifications []notificationmodels.NotiReponseModels) e
 	return nil
 }
 
-func (u *FCMSender) MultiCastMessage(notiReponseModels notificationmodels.NotiReponseModels) error {
-	u.Send([]notificationmodels.NotiReponseModels{notiReponseModels})
+func (u *FCMSender) MultiCastMessage(notiReponseModels notificationmodels.NotiResponseModels) error {
+	u.Send([]notificationmodels.NotiResponseModels{notiReponseModels})
 	return nil
 
 }

@@ -22,7 +22,6 @@ type notifications struct {
 	email          EmailSender
 	latestFcm      FCMSender
 	whatsappsender WhatsappSender
-	sms            SMSSender
 	activitysender ActivitySender
 	// iosvoipsender  IOSVOIPSender
 	semaphore *semaphore.Weighted
@@ -63,13 +62,7 @@ func (c *notifications) CreateController(notificationType int) (NotificationSend
 			c.whatsappsender.Enable()
 		}
 		return &c.whatsappsender, nil
-	case SENDSMS:
-		if !c.sms.IsInitialized() {
-			c.sms = SMSSender{}
-			c.sms.Init(c.semaphore)
-			c.sms.Enable()
-		}
-		return &c.sms, nil
+
 	case ACTIVITYSENDER:
 		if !c.activitysender.IsInitialized() {
 			c.activitysender = ActivitySender{}

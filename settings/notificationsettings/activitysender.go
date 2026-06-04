@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/glodb/keel/app/models/dbmodels/notificationmodels"
+	"github.com/glodb/keel/app/models/notificationmodels"
 	"github.com/glodb/keel/settings/configmanager"
 	"github.com/glodb/keel/settings/logger"
 	"github.com/glodb/keel/settings/utils"
@@ -48,10 +48,10 @@ func (u *ActivitySender) Init(semaphore *semaphore.Weighted) (bool, error) {
 	return true, nil
 }
 
-func (u *ActivitySender) SendMesageToDestinations(notification notificationmodels.NotiReponseModels) {
+func (u *ActivitySender) SendMesageToDestinations(notification notificationmodels.NotiResponseModels) {
 	for _, destination := range notification.Destination {
 
-		go func(notification notificationmodels.NotiReponseModels, destination notificationmodels.NotificationData) {
+		go func(notification notificationmodels.NotiResponseModels, destination notificationmodels.NotificationData) {
 
 			u.semaphore.Acquire(context.Background(), 1)
 			defer u.semaphore.Release(1)
@@ -129,7 +129,7 @@ func (u *ActivitySender) SendMesageToDestinations(notification notificationmodel
 	}
 }
 
-func (u *ActivitySender) Send(notifications []notificationmodels.NotiReponseModels) error {
+func (u *ActivitySender) Send(notifications []notificationmodels.NotiResponseModels) error {
 
 	for _, notification := range notifications {
 		u.SendMesageToDestinations(notification)
@@ -137,8 +137,8 @@ func (u *ActivitySender) Send(notifications []notificationmodels.NotiReponseMode
 	return nil
 }
 
-func (u *ActivitySender) MultiCastMessage(notiReponseModels notificationmodels.NotiReponseModels) error {
-	u.Send([]notificationmodels.NotiReponseModels{notiReponseModels})
+func (u *ActivitySender) MultiCastMessage(notiReponseModels notificationmodels.NotiResponseModels) error {
+	u.Send([]notificationmodels.NotiResponseModels{notiReponseModels})
 
 	return nil
 }

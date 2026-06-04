@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 
-	"github.com/glodb/keel/app/models/dbmodels/keelmodels"
 	"github.com/glodb/keel/app/models/genericmodels"
 	"github.com/glodb/keel/settings/customtypes"
 
@@ -35,8 +34,8 @@ type BaseFunctionsInterface interface {
 	FindOneAndDelete(ctx context.Context, controller Controller, query customtypes.M, result interface{}, option FunctionOptions) error
 	DeleteOne(ctx context.Context, controller Controller, query customtypes.M) error
 	DeleteMany(ctx context.Context, controller Controller, query customtypes.M) error
-	SoftDeleteOne(ctx context.Context, controller Controller, query customtypes.M, deletedBy keelmodels.Session) error
-	SoftDeleteMany(ctx context.Context, controller Controller, query customtypes.M, deletedBy keelmodels.Session) error
+	SoftDeleteOne(ctx context.Context, controller Controller, query customtypes.M, deletedByUserId string, deletedByUserName string) error
+	SoftDeleteMany(ctx context.Context, controller Controller, query customtypes.M, deletedByUserId string, deletedByUserName string) error
 	BulkWrite(ctx context.Context, controller Controller, writers []mongo.WriteModel) error
 	Distinct(ctx context.Context, controller Controller, key string, filter interface{}) ([]interface{}, error)
 	Aggregate(ctx context.Context, controller Controller, result interface{}, basebaseFunctions FunctionOptions, pipelines ...customtypes.M) error

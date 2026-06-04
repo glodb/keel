@@ -1,7 +1,6 @@
 package configmanager
 
 import (
-	"flag"
 	"fmt"
 	"os"
 	"strconv"
@@ -10,12 +9,24 @@ import (
 	"time"
 
 	"github.com/glodb/keel/app/models/genericmodels"
-	configModels "github.com/glodb/keel/settings/configmanager/cofingModels"
+	configmodels "github.com/glodb/keel/settings/configmanager/configmodels"
 	"github.com/glodb/keel/settings/logger"
 	"github.com/glodb/keel/settings/utilsdatatypes"
 
 	"github.com/bytedance/sonic"
 )
+
+var (
+	configuredEnv     = "DEV"
+	configuredService = "SSOSERVICE"
+)
+
+// Configure sets the deployment environment and service name before GetInstance() is called.
+// It must be called before the first call to GetInstance(), typically at the start of Boot().
+func Configure(env, service string) {
+	configuredEnv = env
+	configuredService = service
+}
 
 //Local config has preference over global config
 //Environment variables have preference over local config
@@ -23,12 +34,12 @@ import (
 type config struct {
 	ClassName                   string
 	Address                     string                                `json:"address"`
-	PSql                        configModels.PSqlConfig               `json:"psql"`
-	MySql                       configModels.MySqlConfig              `json:"mysql"`
-	Mongo                       configModels.MongoConfig              `json:"mongo"`
-	Email                       configModels.EmailConfig              `json:"email"`
-	MeilisearchConfig           configModels.MeilisearchConfig        `json:"meilisearch"`
-	AppleConfig                 configModels.AppleConfig              `json:"apple"`
+	PSql                        configmodels.PSqlConfig               `json:"psql"`
+	MySql                       configmodels.MySqlConfig              `json:"mysql"`
+	Mongo                       configmodels.MongoConfig              `json:"mongo"`
+	Email                       configmodels.EmailConfig              `json:"email"`
+	MeilisearchConfig           configmodels.MeilisearchConfig        `json:"meilisearch"`
+	AppleConfig                 configmodels.AppleConfig              `json:"apple"`
 	CacheType                   string                                `json:"cacheType"`
 	ServiceLBName               string                                `json:"serviceLBName"`
 	SessionKey                  string                                `json:"sessionKey"`
@@ -39,13 +50,13 @@ type config struct {
 	PrintInfo                   bool                                  `json:"printInfo"`
 	SubscribedTopics            map[string]interface{}                `json:"subscribedTopics"`
 	NonQueueSubscribedTopics    map[string]interface{}                `json:"nonQueueSubscribedTopics"`
-	RpcSubscribedTopics         map[string]interface{}                `json:"rpcSubscrtibedTopics"`
+	RpcSubscribedTopics         map[string]interface{}                `json:"rpcSubscribedTopics"`
 	MicroServiceName            string                                `json:"microServiceName"`
 	PublisherBatchSize          int64                                 `json:"publisherBatchSize"`
 	NatsServerAddress           string                                `json:"natsServer"`
 	IsProduction                bool                                  `json:"isProduction"`
 	SessionSecret               string                                `json:"sessionSecret"`
-	Redis                       configModels.RedisConnection          `json:"redis"`
+	Redis                       configmodels.RedisConnection          `json:"redis"`
 	ServiceLogName              string                                `json:"serviceLogName"`
 	MapApis                     map[string][]string                   `json:"apis"`
 	MapOpenApis                 map[string]map[string][]string        `json:"openApis"`
@@ -54,7 +65,7 @@ type config struct {
 	MapAcl                      map[string]map[string][]string        `json:"acl"`
 	PageSize                    int                                   `json:"pageSize"`
 	OtpExpirySeconds            int64                                 `json:"otpExpirySeconds"`
-	UseSecureCookie             bool                                  `json:"useScureCookie"`
+	UseSecureCookie             bool                                  `json:"useSecureCookie"`
 	OtpResendSeconds            int64                                 `json:"otpResendSeconds"`
 	WriteError                  bool                                  `json:"writeError"`
 	CookieName                  string                                `json:"cookieName"`
@@ -81,10 +92,10 @@ type config struct {
 	DeletedByPhoneKey           string                                `json:"deletedByPhoneKey"`
 	EnabledNotifications        int                                   `json:"enableNotifications"`
 	DeploymentEnv               string                                `json:"deploymentEnv"`
-	NotificationSender          configModels.NotificationSenderConfig `json:"notificationSender"`
-	Payment                     configModels.PaymentConfig            `json:"payment"`
-	PayTab                      configModels.PayTabConfig             `json:"paytab"`
-	Stripe                      *configModels.StripeConfig            `json:"stripe"`
+	NotificationSender          configmodels.NotificationSenderConfig `json:"notificationSender"`
+	Payment                     configmodels.PaymentConfig            `json:"payment"`
+	PayTab                      configmodels.PayTabConfig             `json:"paytab"`
+	Stripe                      *configmodels.StripeConfig            `json:"stripe"`
 	FirebaseCredentialsFileName string                                `json:"firebaseCredentialsFileName"`
 	FirebaseMessageUrl          string                                `json:"firebaseMessageUrl"`
 	FirebaseProjectId           string                                `json:"firebaseProjectId"`
@@ -106,7 +117,7 @@ type config struct {
 	SecureCookieSecret          string                                `json:"secureCookieSecret"`
 	SecureSessionExpirySeconds  int64                                 `json:"secureSessionExpirySeconds"`
 	CacheContextTimeout         int64                                 `json:"cacheContextTimeout"`
-	RateLimit                   configModels.RateLimitConfig          `json:"rateLimit"`
+	RateLimit                   configmodels.RateLimitConfig          `json:"rateLimit"`
 	ServiceVersion              genericmodels.Version                 `json:"serviceVersion"`
 	ServiceMinVersion           string                                `json:"serviceMinVersion"`
 	ServiceMinVersionParsed     genericmodels.Version                 `json:"serviceMinVersionParsed"`
@@ -392,7 +403,7 @@ func (c *config) loadFromSystemEnv() {
 		c.FirebaseCredentialsJson = envVal
 	}
 
-	c.Stripe = &configModels.StripeConfig{}
+	c.Stripe = &configmodels.StripeConfig{}
 	if envVal := os.Getenv("STRIPE_SECRET_KEY"); envVal != "" {
 		c.Stripe.SecretKey = envVal
 	}
@@ -579,25 +590,21 @@ func (c *config) Setup() {
 	)
 }
 
-// GetConfigNameAndPath get the config name on the basis of flag
+// getConfigNameAndPath resolves the config name and path from values set by Configure().
 func (c *config) getConfigNameAndPath() (string, string, string, string) {
-	serverType := flag.String("env", "DEV", "use development server by default")
-	configPath := flag.String("con", "SSOSERVICE", "use Uploader server by default")
+	conName := strings.ToLower(configuredEnv)
+	serviceName := configuredService
 
-	var conName string
-	var conPath string
-	flag.Parse()
-	conName = strings.ToLower(*serverType)
 	path, err := os.Getwd()
 	if err != nil {
 		logger.Log().Error("Error getting working directory",
 			logger.ErrorField("error", err),
 		)
-		return conName, conPath, *configPath, path
+		return conName, "", serviceName, path
 	}
-	conPath = path + "/config/" + conName + ".json"
+	conPath := path + "/config/" + conName + ".json"
 
-	return conName, conPath, *configPath, path
+	return conName, conPath, serviceName, path
 }
 
 func (c *config) GetPrintInfo() bool {

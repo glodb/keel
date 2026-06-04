@@ -3,7 +3,7 @@ package notificationsettings
 import (
 	"context"
 
-	"github.com/glodb/keel/app/models/dbmodels/notificationmodels"
+	"github.com/glodb/keel/app/models/notificationmodels"
 
 	"github.com/twilio/twilio-go"
 	"golang.org/x/sync/semaphore"
@@ -27,7 +27,7 @@ func (u *WhatsappSender) Init(semaphore *semaphore.Weighted) (bool, error) {
 	return true, nil
 }
 
-func (u *WhatsappSender) Send(notifications []notificationmodels.NotiReponseModels) error {
+func (u *WhatsappSender) Send(notifications []notificationmodels.NotiResponseModels) error {
 
 	go func(u *WhatsappSender) {
 		u.semaphore.Acquire(context.Background(), 1)
@@ -37,7 +37,7 @@ func (u *WhatsappSender) Send(notifications []notificationmodels.NotiReponseMode
 	return nil
 }
 
-func (u *WhatsappSender) MultiCastMessage(notiReponseModels notificationmodels.NotiReponseModels) error {
+func (u *WhatsappSender) MultiCastMessage(notiReponseModels notificationmodels.NotiResponseModels) error {
 	u.semaphore.Acquire(context.Background(), 1)
 	defer u.semaphore.Release(1)
 

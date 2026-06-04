@@ -26,7 +26,7 @@ type SocketIO struct {
 	onNewSessionCallback func(c *SocketSession)
 	onSessionDisconnect  func(c *SocketSession, reason string)
 
-	onLogin     func(c *SocketSession, credentials socketmodels.Login)
+	onMessage   func(c *SocketSession, message socketmodels.Message)
 	socketUsers map[string]*utilsdatatypes.Set[*SocketSession] //To send a message to specific user based on user id
 	mutex       sync.RWMutex
 }
@@ -143,10 +143,9 @@ func (s *SocketIO) registerTopics(server *socketio.Server) {
 		}
 	})
 
-	server.OnEvent("/", socketevents.LOGIN, func(sock socketio.Conn, variables socketmodels.Login) {
-		////fmt.Println(variables)
+	server.OnEvent("/", socketevents.MESSAGE, func(sock socketio.Conn, variables socketmodels.Message) {
 		session := sock.Context().(*SocketSession)
-		s.onLogin(session, variables)
+		s.onMessage(session, variables)
 	})
 }
 
@@ -162,8 +161,8 @@ func (s *SocketIO) OnError(callback func(c *SocketSession, err error)) {
 	s.onError = callback
 }
 
-func (s *SocketIO) OnLogin(callback func(c *SocketSession, credentials socketmodels.Login)) {
-	s.onLogin = callback
+func (s *SocketIO) OnMessage(callback func(c *SocketSession, message socketmodels.Message)) {
+	s.onMessage = callback
 }
 
 func (s *SocketIO) GetUserSessions(userId string) *utilsdatatypes.Set[*SocketSession] {
@@ -242,6 +241,6 @@ func New(address string) *SocketIO {
 	server.OnNewSessionCallback(func(c *SocketSession) {})
 	server.OnSessionDisconnect(func(c *SocketSession, reason string) {})
 	server.OnError(func(c *SocketSession, err error) {})
-	server.OnLogin(func(c *SocketSession, credentials socketmodels.Login) {})
+	server.OnMessage(func(c *SocketSession, message socketmodels.Message) {})
 	return server
 }
