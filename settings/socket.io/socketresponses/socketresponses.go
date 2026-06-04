@@ -3,7 +3,7 @@ package socketresponses
 import (
 	"sync"
 
-	"github.com/glodb/keel/app/models/genericmodels"
+	"github.com/glodb/keel/models/genericmodels"
 	"github.com/glodb/keel/settings/logger"
 	socketio "github.com/glodb/keel/settings/socket.io"
 )

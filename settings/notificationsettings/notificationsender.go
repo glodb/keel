@@ -1,7 +1,7 @@
 package notificationsettings
 
 import (
-	"github.com/glodb/keel/app/models/notificationmodels"
+	"github.com/glodb/keel/models/notificationmodels"
 
 	"golang.org/x/sync/semaphore"
 )

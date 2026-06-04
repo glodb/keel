@@ -1,7 +1,7 @@
 package baseinterfaces
 
 import (
-	"github.com/glodb/keel/app/models/genericmodels"
+	"github.com/glodb/keel/models/genericmodels"
 	"github.com/glodb/keel/database/basetypes"
 	"github.com/glodb/keel/settings/customtypes"
 )

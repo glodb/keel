@@ -4,7 +4,7 @@ import (
 	"context"
 	"database/sql"
 
-	"github.com/glodb/keel/app/models/genericmodels"
+	"github.com/glodb/keel/models/genericmodels"
 	"github.com/glodb/keel/settings/customtypes"
 
 	"go.mongodb.org/mongo-driver/mongo"

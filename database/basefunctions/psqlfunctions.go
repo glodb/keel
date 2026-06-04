@@ -10,10 +10,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/glodb/keel/app/models/genericmodels"
 	"github.com/glodb/keel/database/baseconnections"
 	"github.com/glodb/keel/database/basetypes"
 	"github.com/glodb/keel/httpHandler/controllers/baseinterfaces"
+	"github.com/glodb/keel/models/genericmodels"
 	"github.com/glodb/keel/settings/customtypes"
 
 	"github.com/lib/pq"

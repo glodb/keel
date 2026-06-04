@@ -189,16 +189,5 @@ func getEnvironmentColor(env string) string {
 
 // getEnvironmentBadge returns the environment badge text
 func getEnvironmentBadge(env string) string {
-	switch strings.ToUpper(env) {
-	case "PROD":
-		return "PRODUCTION"
-	case "UAT":
-		return "UAT"
-	case "TEST":
-		return "TESTING"
-	case "DEV":
-		return "DEVELOPMENT"
-	default:
-		return strings.ToUpper(env)
-	}
+	return strings.ToUpper(env)
 }

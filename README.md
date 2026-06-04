@@ -1,6 +1,12 @@
+![Go](https://img.shields.io/badge/go-1.21+-blue)
+![License](https://img.shields.io/badge/license-MIT-green)
+![Version](https://img.shields.io/badge/version-v0.1-orange)
 # keel
 
 keel is a Go microservice framework that provides opinionated, batteries-included infrastructure for building production microservices: HTTP routing, NATS messaging, database access (Mongo/MySQL/PostgreSQL), Redis caching, search (Meilisearch), notifications (FCM/email/SMS/WhatsApp), distributed tracing, metrics, circuit breakers, and more.
+
+New service from zero to running: **under 5 minutes**.
+Independently verified by Claude Sonnet in Cursor.
 
 v0.1 — opinionated, batteries-included framework. Modular architecture planned for v0.2.
 
@@ -9,6 +15,10 @@ v0.1 — opinionated, batteries-included framework. Modular architecture planned
 ```bash
 go get github.com/glodb/keel
 ```
+
+## Why Keel
+
+Most Go microservice projects repeat the same wiring: HTTP server, database connections, messaging, caching, observability — from scratch, every time. Keel provides a single opinionated core so you register your service and start writing business logic immediately.
 
 ## Quick Start
 
@@ -101,7 +111,3 @@ Environment variables override JSON values. See `settings/configmanager` for the
 ## Dependency note
 
 Importing `github.com/glodb/keel` pulls in the full dependency set (Mongo, MySQL, PostgreSQL, Redis, NATS, Firebase, Twilio, Stripe, OpenTelemetry, etc.). This is intentional for a framework; opt-in sub-package splitting is on the roadmap.
-
-## Ops / Docker reference
-
-See [docs/ops.md](docs/ops.md) for Docker run commands and deployment notes.

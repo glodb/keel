@@ -7,10 +7,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/glodb/keel/app/models/cachemodels"
+	"github.com/glodb/keel/models/cachemodels"
 	"github.com/glodb/keel/settings/configmanager"
 	"github.com/glodb/keel/settings/logger"
-	"github.com/glodb/keel/settings/metrics"
 	"github.com/gomodule/redigo/redis"
 	"golang.org/x/sync/semaphore"
 )
@@ -95,9 +94,7 @@ func (cache *RedisCache) Set(ctx context.Context, key string, value []byte) erro
 	_, err := c.Do("SET", configmanager.GetInstance().DeploymentEnv+key, value)
 	if err != nil {
 		logger.Log().Debug("Error setting key", logger.StringField("key", key), logger.ErrorField("error", err))
-		metrics.GetInstance().RecordCacheMiss("redis_set", configmanager.GetInstance().ServiceLBName)
 	} else {
-		metrics.GetInstance().RecordCacheHit("redis_set", configmanager.GetInstance().ServiceLBName)
 	}
 	return err
 }
@@ -143,9 +140,7 @@ func (cache *RedisCache) ReleaseLock(ctx context.Context, lockKey string) error 
 	_, err := c.Do("DEL", configmanager.GetInstance().DeploymentEnv+lockKey)
 
 	if err != nil {
-		metrics.GetInstance().RecordCacheMiss("redis_release_lock", configmanager.GetInstance().ServiceLBName)
 	} else {
-		metrics.GetInstance().RecordCacheHit("redis_release_lock", configmanager.GetInstance().ServiceLBName)
 	}
 	return err
 }
@@ -158,9 +153,7 @@ func (cache *RedisCache) SetEx(ctx context.Context, key string, value []byte, ex
 	_, err := c.Do("SETEX", configmanager.GetInstance().DeploymentEnv+key, expiryTime, value)
 	if err != nil {
 		logger.Log().Debug("Error setting key", logger.StringField("key", key), logger.ErrorField("error", err))
-		metrics.GetInstance().RecordCacheMiss("redis_set_ex", configmanager.GetInstance().ServiceLBName)
 	} else {
-		metrics.GetInstance().RecordCacheHit("redis_set_ex", configmanager.GetInstance().ServiceLBName)
 	}
 
 	return err
@@ -176,14 +169,12 @@ func (cache *RedisCache) SUnion(ctx context.Context, keys ...interface{}) []stri
 	data, err := redis.Strings(c.Do("SUNION", keys...))
 	if err != nil {
 		logger.Log().Debug("Error getting union from sets", logger.AnyField("keys", keys), logger.ErrorField("error", err))
-		metrics.GetInstance().RecordCacheMiss("redis_sunion", configmanager.GetInstance().ServiceLBName)
 		return []string{}
 	}
 	if data == nil {
 		logger.Log().Debug("No data found in union", logger.AnyField("keys", keys))
 		return []string{}
 	}
-	metrics.GetInstance().RecordCacheHit("redis_sunion", configmanager.GetInstance().ServiceLBName)
 	return data
 }
 
@@ -199,10 +190,8 @@ func (cache *RedisCache) GetInt(ctx context.Context, key string) (int64, error) 
 	dataint, err := c.Do("GET", configmanager.GetInstance().DeploymentEnv+key)
 	if err != nil {
 		logger.Log().Debug("Error getting int", logger.StringField("key", key), logger.ErrorField("error", err))
-		metrics.GetInstance().RecordCacheMiss("redis_get_int", configmanager.GetInstance().ServiceLBName)
 		return -1, err
 	}
-	metrics.GetInstance().RecordCacheHit("redis_get_int", configmanager.GetInstance().ServiceLBName)
 	if dataint != nil {
 		data, err = redis.Int64(dataint, err)
 	}
@@ -218,9 +207,7 @@ func (cache *RedisCache) SetInt(ctx context.Context, key string, value int) erro
 	_, err := c.Do("SET", configmanager.GetInstance().DeploymentEnv+key, value)
 	if err != nil {
 		logger.Log().Debug("Error setting int", logger.StringField("key", key), logger.IntField("value", value), logger.ErrorField("error", err))
-		metrics.GetInstance().RecordCacheMiss("redis_set_int", configmanager.GetInstance().ServiceLBName)
 	} else {
-		metrics.GetInstance().RecordCacheHit("redis_set_int", configmanager.GetInstance().ServiceLBName)
 	}
 	return err
 }
@@ -236,10 +223,8 @@ func (cache *RedisCache) Increment(ctx context.Context, key string) (int64, erro
 	defer c.Close()
 	val, err := c.Do("INCR", configmanager.GetInstance().DeploymentEnv+key)
 	if err != nil {
-		metrics.GetInstance().RecordCacheMiss("redis_increment", configmanager.GetInstance().ServiceLBName)
 		return -1, err
 	}
-	metrics.GetInstance().RecordCacheHit("redis_increment", configmanager.GetInstance().ServiceLBName)
 	return val.(int64), err
 }
 
@@ -255,10 +240,8 @@ func (cache *RedisCache) Decrement(ctx context.Context, key string) (int64, erro
 	val, err := c.Do("DECR", configmanager.GetInstance().DeploymentEnv+key)
 	if err != nil {
 		logger.Log().Debug("Error decrementing", logger.StringField("key", key), logger.ErrorField("error", err))
-		metrics.GetInstance().RecordCacheMiss("redis_decrement", configmanager.GetInstance().ServiceLBName)
 		return -1, err
 	}
-	metrics.GetInstance().RecordCacheHit("redis_decrement", configmanager.GetInstance().ServiceLBName)
 	return val.(int64), err
 }
 
@@ -275,9 +258,7 @@ func (cache *RedisCache) SetString(ctx context.Context, key string, value string
 		if len(v) > 15 {
 			v = v[0:12] + "..."
 		}
-		metrics.GetInstance().RecordCacheMiss("redis_set_string", configmanager.GetInstance().ServiceLBName)
 	} else {
-		metrics.GetInstance().RecordCacheHit("redis_set_string", configmanager.GetInstance().ServiceLBName)
 	}
 	return err
 }
@@ -294,13 +275,11 @@ func (cache *RedisCache) Get(ctx context.Context, key string) ([]byte, error) {
 	dataint, err := c.Do("GET", configmanager.GetInstance().DeploymentEnv+key)
 	if err != nil {
 		logger.Log().Debug("Error getting", logger.StringField("key", key), logger.ErrorField("error", err))
-		metrics.GetInstance().RecordCacheMiss("redis_get", configmanager.GetInstance().ServiceLBName)
 		return []byte{}, err
 	}
 	if dataint != nil {
 		data, err = redis.Bytes(dataint, err)
 	}
-	metrics.GetInstance().RecordCacheHit("redis_get", configmanager.GetInstance().ServiceLBName)
 	return data, err
 }
 
@@ -316,10 +295,8 @@ func (cache *RedisCache) GetKeys(ctx context.Context, pattern string) []string {
 	data, err := redis.Strings(c.Do("Keys", pattern))
 	if err != nil {
 		logger.Log().Debug("Error getting keys", logger.StringField("pattern", pattern), logger.ErrorField("error", err))
-		metrics.GetInstance().RecordCacheMiss("redis_get_keys", configmanager.GetInstance().ServiceLBName)
 		return []string{}
 	}
-	metrics.GetInstance().RecordCacheHit("redis_get_keys", configmanager.GetInstance().ServiceLBName)
 	return data
 }
 func (cache *RedisCache) GetString(ctx context.Context, key string) (string, error) {
@@ -336,7 +313,6 @@ func (cache *RedisCache) GetString(ctx context.Context, key string) (string, err
 	dataint, err := c.Do("GET", configmanager.GetInstance().DeploymentEnv+key)
 	if err != nil {
 		logger.Log().Debug("Error getting string", logger.StringField("key", key), logger.ErrorField("error", err))
-		metrics.GetInstance().RecordCacheMiss("redis_get_string", configmanager.GetInstance().ServiceLBName)
 		return "", err
 	}
 	if dataint != nil {
@@ -345,7 +321,6 @@ func (cache *RedisCache) GetString(ctx context.Context, key string) (string, err
 			logger.Log().Debug("Error converting to string", logger.ErrorField("error", err))
 		}
 	}
-	metrics.GetInstance().RecordCacheHit("redis_get_string", configmanager.GetInstance().ServiceLBName)
 	return data, err
 }
 
@@ -357,9 +332,7 @@ func (cache *RedisCache) Del(ctx context.Context, key string) error {
 	_, err := c.Do("DEL", configmanager.GetInstance().DeploymentEnv+key)
 	if err != nil {
 		logger.Log().Debug("Error deleting", logger.StringField("key", key), logger.ErrorField("error", err))
-		metrics.GetInstance().RecordCacheMiss("redis_del", configmanager.GetInstance().ServiceLBName)
 	} else {
-		metrics.GetInstance().RecordCacheHit("redis_del", configmanager.GetInstance().ServiceLBName)
 	}
 	return err
 }
@@ -378,9 +351,7 @@ func (cache *RedisCache) DelMany(ctx context.Context, keys []string) error {
 	_, err := c.Do("DEL", redis.Args{}.AddFlat(newKeys)...)
 	if err != nil {
 		logger.Log().Debug("Error deleting many", logger.AnyField("keys", keys), logger.ErrorField("error", err))
-		metrics.GetInstance().RecordCacheMiss("redis_del_many", configmanager.GetInstance().ServiceLBName)
 	} else {
-		metrics.GetInstance().RecordCacheHit("redis_del_many", configmanager.GetInstance().ServiceLBName)
 	}
 	return err
 }
@@ -393,9 +364,7 @@ func (cache *RedisCache) Append(ctx context.Context, key string, value interface
 	_, err := c.Do("APPEND", configmanager.GetInstance().DeploymentEnv+key, value)
 	if err != nil {
 		logger.Log().Debug("Error appending", logger.StringField("key", key), logger.AnyField("value", value), logger.ErrorField("error", err))
-		metrics.GetInstance().RecordCacheMiss("redis_append", configmanager.GetInstance().ServiceLBName)
 	} else {
-		metrics.GetInstance().RecordCacheHit("redis_append", configmanager.GetInstance().ServiceLBName)
 	}
 	return err
 }
@@ -424,10 +393,8 @@ func (cache *RedisCache) SAdd(ctx context.Context, key string, values ...interfa
 	_, err := c.Do("SADD", keys...)
 	if err != nil {
 		logger.Log().Debug("Error adding to set", logger.StringField("key", key), logger.AnyField("values", values), logger.ErrorField("error", err))
-		metrics.GetInstance().RecordCacheMiss("redis_sadd", configmanager.GetInstance().ServiceLBName)
 		return err
 	}
-	metrics.GetInstance().RecordCacheHit("redis_sadd", configmanager.GetInstance().ServiceLBName)
 
 	return nil
 }
@@ -442,9 +409,7 @@ func (cache *RedisCache) SPop(ctx context.Context, key string, count int) []stri
 	data, err := redis.Strings(c.Do("SPOP", configmanager.GetInstance().DeploymentEnv+key, count))
 	if err != nil {
 		logger.Log().Debug("Error popping from set", logger.StringField("key", key), logger.ErrorField("error", err))
-		metrics.GetInstance().RecordCacheMiss("redis_spop", configmanager.GetInstance().ServiceLBName)
 	} else {
-		metrics.GetInstance().RecordCacheHit("redis_spop", configmanager.GetInstance().ServiceLBName)
 	}
 	return data
 }
@@ -465,7 +430,6 @@ func (cache *RedisCache) SPopTransaction(ctx context.Context, key string, count 
 	reply, err := c.Do("EXEC")
 	if err != nil {
 		logger.Log().Debug("Error popping from set", logger.StringField("key", key), logger.ErrorField("error", err))
-		metrics.GetInstance().RecordCacheMiss("redis_spop_transaction", configmanager.GetInstance().ServiceLBName)
 		return []string{}
 	}
 
@@ -473,10 +437,8 @@ func (cache *RedisCache) SPopTransaction(ctx context.Context, key string, count 
 	data, err := redis.Strings(reply.([]interface{})[0], nil)
 	if err != nil {
 		logger.Log().Debug("Error popping from set", logger.StringField("key", key), logger.ErrorField("error", err))
-		metrics.GetInstance().RecordCacheMiss("redis_spop_transaction", configmanager.GetInstance().ServiceLBName)
 		return []string{}
 	}
-	metrics.GetInstance().RecordCacheHit("redis_spop_transaction", configmanager.GetInstance().ServiceLBName)
 	return data
 }
 
@@ -500,10 +462,8 @@ func (cache *RedisCache) SAddTransaction(ctx context.Context, key string, values
 	// Execute the transaction
 	_, err := conn.Do("EXEC")
 	if err != nil {
-		metrics.GetInstance().RecordCacheMiss("redis_sadd_transaction", configmanager.GetInstance().ServiceLBName)
 		return err
 	}
-	metrics.GetInstance().RecordCacheHit("redis_sadd_transaction", configmanager.GetInstance().ServiceLBName)
 	return err
 }
 
@@ -518,9 +478,7 @@ func (cache *RedisCache) SMembers(ctx context.Context, key string) []string {
 	data, err := redis.Strings(c.Do("SMEMBERS", configmanager.GetInstance().DeploymentEnv+key))
 	if err != nil {
 		logger.Log().Debug("Error getting members from set", logger.StringField("key", key), logger.ErrorField("error", err))
-		metrics.GetInstance().RecordCacheMiss("redis_smembers", configmanager.GetInstance().ServiceLBName)
 	} else {
-		metrics.GetInstance().RecordCacheHit("redis_smembers", configmanager.GetInstance().ServiceLBName)
 	}
 	return data
 }
@@ -541,10 +499,8 @@ func (cache *RedisCache) SRem(ctx context.Context, key string, value ...interfac
 	_, err := c.Do("SREM", append([]interface{}{configmanager.GetInstance().DeploymentEnv + key}, value...)...)
 	if err != nil {
 		logger.Log().Debug("Error removing from set", logger.AnyField("value", value), logger.ErrorField("error", err))
-		metrics.GetInstance().RecordCacheMiss("redis_srem", configmanager.GetInstance().ServiceLBName)
 		return err
 	}
-	metrics.GetInstance().RecordCacheHit("redis_srem", configmanager.GetInstance().ServiceLBName)
 
 	return nil
 }
@@ -566,10 +522,8 @@ func (cache *RedisCache) SCard(ctx context.Context, key string) (int64, error) {
 	length, err := redis.Int64(c.Do("SCARD", configmanager.GetInstance().DeploymentEnv+key))
 	if err != nil {
 		logger.Log().Debug("Error getting card from set", logger.StringField("key", key), logger.ErrorField("error", err))
-		metrics.GetInstance().RecordCacheMiss("redis_scard", configmanager.GetInstance().ServiceLBName)
 		return 0, err
 	}
-	metrics.GetInstance().RecordCacheHit("redis_scard", configmanager.GetInstance().ServiceLBName)
 
 	return length, nil
 }
@@ -585,10 +539,8 @@ func (cache *RedisCache) SetISMember(ctx context.Context, key string, member str
 	val, err := redis.Bool(c.Do("SISMEMBER", configmanager.GetInstance().DeploymentEnv+key, member))
 	if err != nil {
 		logger.Log().Debug("Error checking if member is in set", logger.StringField("key", key), logger.StringField("member", member), logger.ErrorField("error", err))
-		metrics.GetInstance().RecordCacheMiss("redis_sismember", configmanager.GetInstance().ServiceLBName)
 		return false
 	}
-	metrics.GetInstance().RecordCacheHit("redis_sismember", configmanager.GetInstance().ServiceLBName)
 	return val
 }
 
@@ -607,10 +559,8 @@ func (cache *RedisCache) SetMISMember(ctx context.Context, key string, values ..
 	val, err := redis.Int64s(c.Do("SMISMEMBER", keys...))
 	if err != nil {
 		logger.Log().Debug("Error checking if members are in set", logger.StringField("key", key), logger.AnyField("values", values), logger.ErrorField("error", err))
-		metrics.GetInstance().RecordCacheMiss("redis_smismember", configmanager.GetInstance().ServiceLBName)
 		return nil
 	}
-	metrics.GetInstance().RecordCacheHit("redis_smismember", configmanager.GetInstance().ServiceLBName)
 	return val
 }
 
@@ -625,10 +575,8 @@ func (cache *RedisCache) Expire(ctx context.Context, key string, expirationTime 
 	_, err := redis.Bool(c.Do("EXPIRE", configmanager.GetInstance().DeploymentEnv+key, expirationTime))
 	if err != nil {
 		logger.Log().Debug("Error expiring key", logger.StringField("key", key), logger.ErrorField("error", err))
-		metrics.GetInstance().RecordCacheMiss("redis_expire", configmanager.GetInstance().ServiceLBName)
 		return err
 	}
-	metrics.GetInstance().RecordCacheHit("redis_expire", configmanager.GetInstance().ServiceLBName)
 	return nil
 }
 
@@ -659,9 +607,7 @@ func (cache *RedisCache) HashMultiSet(ctx context.Context, key string, args map[
 	_, err := c.Do("HMSET", redis.Args{configmanager.GetInstance().DeploymentEnv + key}.AddFlat(args)...)
 	if err != nil {
 		logger.Log().Debug("Error setting hash", logger.StringField("key", key), logger.ErrorField("error", err))
-		metrics.GetInstance().RecordCacheMiss("redis_hmset", configmanager.GetInstance().ServiceLBName)
 	} else {
-		metrics.GetInstance().RecordCacheHit("redis_hmset", configmanager.GetInstance().ServiceLBName)
 	}
 }
 
@@ -675,9 +621,7 @@ func (cache *RedisCache) HashMultiSetString(ctx context.Context, key string, arg
 	_, err := c.Do("HMSET", redis.Args{configmanager.GetInstance().DeploymentEnv + key}.AddFlat(args)...)
 	if err != nil {
 		logger.Log().Debug("Error setting hash", logger.StringField("key", key), logger.ErrorField("error", err))
-		metrics.GetInstance().RecordCacheMiss("redis_hmset", configmanager.GetInstance().ServiceLBName)
 	} else {
-		metrics.GetInstance().RecordCacheHit("redis_hmset", configmanager.GetInstance().ServiceLBName)
 	}
 }
 
@@ -691,9 +635,7 @@ func (cache *RedisCache) HashMultiSetInt(ctx context.Context, key string, args m
 	_, err := c.Do("HMSET", redis.Args{configmanager.GetInstance().DeploymentEnv + key}.AddFlat(args)...)
 	if err != nil {
 		logger.Log().Debug("Error setting hash", logger.StringField("key", key), logger.ErrorField("error", err))
-		metrics.GetInstance().RecordCacheMiss("redis_hmset", configmanager.GetInstance().ServiceLBName)
 	} else {
-		metrics.GetInstance().RecordCacheHit("redis_hmset", configmanager.GetInstance().ServiceLBName)
 	}
 }
 
@@ -711,9 +653,7 @@ func (cache *RedisCache) HashSet(ctx context.Context, key string, args []interfa
 	_, err := c.Do("HSET", keys...)
 	if err != nil {
 		logger.Log().Debug("Error setting hash", logger.StringField("key", key), logger.ErrorField("error", err))
-		metrics.GetInstance().RecordCacheMiss("redis_hset", configmanager.GetInstance().ServiceLBName)
 	} else {
-		metrics.GetInstance().RecordCacheHit("redis_hset", configmanager.GetInstance().ServiceLBName)
 	}
 }
 
@@ -727,9 +667,7 @@ func (cache *RedisCache) LPush(ctx context.Context, key string, args []byte) {
 	_, err := c.Do("LPUSH", configmanager.GetInstance().DeploymentEnv+key, args)
 	if err != nil {
 		logger.Log().Debug("Error pushing to list", logger.StringField("key", key), logger.ErrorField("error", err))
-		metrics.GetInstance().RecordCacheMiss("redis_lpush", configmanager.GetInstance().ServiceLBName)
 	} else {
-		metrics.GetInstance().RecordCacheHit("redis_lpush", configmanager.GetInstance().ServiceLBName)
 	}
 }
 
@@ -743,9 +681,7 @@ func (cache *RedisCache) LTrim(ctx context.Context, key string, start int, end i
 	_, err := c.Do("LTRIM", configmanager.GetInstance().DeploymentEnv+key, start, end)
 	if err != nil {
 		logger.Log().Debug("Error trimming list", logger.StringField("key", key), logger.ErrorField("error", err))
-		metrics.GetInstance().RecordCacheMiss("redis_ltrim", configmanager.GetInstance().ServiceLBName)
 	} else {
-		metrics.GetInstance().RecordCacheHit("redis_ltrim", configmanager.GetInstance().ServiceLBName)
 	}
 }
 
@@ -759,9 +695,7 @@ func (cache *RedisCache) LRange(ctx context.Context, key string, start int, end 
 	data, err := redis.Strings(c.Do("LRANGE", configmanager.GetInstance().DeploymentEnv+key, start, end))
 	if err != nil {
 		logger.Log().Debug("Error getting list range", logger.StringField("key", key), logger.ErrorField("error", err))
-		metrics.GetInstance().RecordCacheMiss("redis_lrange", configmanager.GetInstance().ServiceLBName)
 	} else {
-		metrics.GetInstance().RecordCacheHit("redis_lrange", configmanager.GetInstance().ServiceLBName)
 	}
 	return data
 }
@@ -776,9 +710,7 @@ func (cache *RedisCache) HashGet(ctx context.Context, key string, field string) 
 	data, err := redis.String(c.Do("HGET", configmanager.GetInstance().DeploymentEnv+key, field))
 	if err != nil {
 		logger.Log().Debug("Error getting hash", logger.StringField("key", key), logger.StringField("field", field), logger.ErrorField("error", err))
-		metrics.GetInstance().RecordCacheMiss("redis_hget", configmanager.GetInstance().ServiceLBName)
 	} else {
-		metrics.GetInstance().RecordCacheHit("redis_hget", configmanager.GetInstance().ServiceLBName)
 	}
 	return data
 }
@@ -793,9 +725,7 @@ func (cache *RedisCache) HashGetNoPrint(ctx context.Context, key string, field s
 	data, err := redis.String(c.Do("HGET", configmanager.GetInstance().DeploymentEnv+key, field))
 	if err != nil {
 		logger.Log().Debug("Error getting hash", logger.StringField("key", key), logger.StringField("field", field), logger.ErrorField("error", err))
-		metrics.GetInstance().RecordCacheMiss("redis_hget", configmanager.GetInstance().ServiceLBName)
 	} else {
-		metrics.GetInstance().RecordCacheHit("redis_hget", configmanager.GetInstance().ServiceLBName)
 	}
 	return data, err
 }
@@ -810,9 +740,7 @@ func (cache *RedisCache) HashGetBytes(ctx context.Context, key string, field str
 	data, err := redis.Bytes(c.Do("HGET", configmanager.GetInstance().DeploymentEnv+key, field))
 	if err != nil {
 		logger.Log().Debug("Error getting hash", logger.StringField("key", key), logger.StringField("field", field), logger.ErrorField("error", err))
-		metrics.GetInstance().RecordCacheMiss("redis_hget", configmanager.GetInstance().ServiceLBName)
 	} else {
-		metrics.GetInstance().RecordCacheHit("redis_hget", configmanager.GetInstance().ServiceLBName)
 	}
 	return data
 }
@@ -826,9 +754,7 @@ func (cache *RedisCache) HashDel(ctx context.Context, key string, field string) 
 	_, err := c.Do("HDEL", configmanager.GetInstance().DeploymentEnv+key, field)
 	if err != nil {
 		logger.Log().Debug("Error deleting hash", logger.StringField("key", key), logger.StringField("field", field), logger.ErrorField("error", err))
-		metrics.GetInstance().RecordCacheMiss("redis_hdel", configmanager.GetInstance().ServiceLBName)
 	} else {
-		metrics.GetInstance().RecordCacheHit("redis_hdel", configmanager.GetInstance().ServiceLBName)
 	}
 	return err
 }
@@ -843,9 +769,7 @@ func (cache *RedisCache) HashLen(ctx context.Context, key string) (int64, error)
 	length, err := redis.Int64(c.Do("HLEN", configmanager.GetInstance().DeploymentEnv+key))
 	if err != nil {
 		logger.Log().Debug("Error getting hash length", logger.StringField("key", key), logger.ErrorField("error", err))
-		metrics.GetInstance().RecordCacheMiss("redis_hlen", configmanager.GetInstance().ServiceLBName)
 	} else {
-		metrics.GetInstance().RecordCacheHit("redis_hlen", configmanager.GetInstance().ServiceLBName)
 	}
 	return length, err
 }
@@ -860,9 +784,7 @@ func (cache *RedisCache) HashGetAll(ctx context.Context, key string) map[string]
 	data, err := redis.StringMap(c.Do("HGETALL", configmanager.GetInstance().DeploymentEnv+key))
 	if err != nil {
 		logger.Log().Debug("Error getting hash all", logger.StringField("key", key), logger.ErrorField("error", err))
-		metrics.GetInstance().RecordCacheMiss("redis_hgetall", configmanager.GetInstance().ServiceLBName)
 	} else {
-		metrics.GetInstance().RecordCacheHit("redis_hgetall", configmanager.GetInstance().ServiceLBName)
 	}
 	return data
 }
@@ -877,9 +799,7 @@ func (cache *RedisCache) HashGetInt(ctx context.Context, key string, field strin
 	data, err := redis.Int(c.Do("HGET", configmanager.GetInstance().DeploymentEnv+key, field))
 	if err != nil {
 		logger.Log().Debug("Error getting hash int", logger.StringField("key", key), logger.StringField("field", field), logger.ErrorField("error", err))
-		metrics.GetInstance().RecordCacheMiss("redis_hget", configmanager.GetInstance().ServiceLBName)
 	} else {
-		metrics.GetInstance().RecordCacheHit("redis_hget", configmanager.GetInstance().ServiceLBName)
 	}
 	return data
 }
@@ -894,9 +814,7 @@ func (cache *RedisCache) HashGetBool(ctx context.Context, key string, field stri
 	data, err := redis.Bool(c.Do("HGET", configmanager.GetInstance().DeploymentEnv+key, field))
 	if err != nil {
 		logger.Log().Debug("Error getting hash bool", logger.StringField("key", key), logger.StringField("field", field), logger.ErrorField("error", err))
-		metrics.GetInstance().RecordCacheMiss("redis_hget", configmanager.GetInstance().ServiceLBName)
 	} else {
-		metrics.GetInstance().RecordCacheHit("redis_hget", configmanager.GetInstance().ServiceLBName)
 	}
 	return data
 }
@@ -911,9 +829,7 @@ func (cache *RedisCache) HashGetInt64(ctx context.Context, key string, field str
 	data, err := redis.Int64(c.Do("HGET", configmanager.GetInstance().DeploymentEnv+key, field))
 	if err != nil {
 		logger.Log().Debug("Error getting hash int64", logger.StringField("key", key), logger.StringField("field", field), logger.ErrorField("error", err))
-		metrics.GetInstance().RecordCacheMiss("redis_hget", configmanager.GetInstance().ServiceLBName)
 	} else {
-		metrics.GetInstance().RecordCacheHit("redis_hget", configmanager.GetInstance().ServiceLBName)
 	}
 	return data
 }
@@ -928,9 +844,7 @@ func (cache *RedisCache) HashGetFloat64(ctx context.Context, key string, field s
 	data, err := redis.Float64(c.Do("HGET", configmanager.GetInstance().DeploymentEnv+key, field))
 	if err != nil {
 		logger.Log().Debug("Error getting hash float64", logger.StringField("key", key), logger.StringField("field", field), logger.ErrorField("error", err))
-		metrics.GetInstance().RecordCacheMiss("redis_hget", configmanager.GetInstance().ServiceLBName)
 	} else {
-		metrics.GetInstance().RecordCacheHit("redis_hget", configmanager.GetInstance().ServiceLBName)
 	}
 	return data
 }
@@ -945,9 +859,7 @@ func (cache *RedisCache) HashGetInt64WithError(ctx context.Context, key string, 
 	data, err := redis.Int64(c.Do("HGET", configmanager.GetInstance().DeploymentEnv+key, field))
 	if err != nil {
 		logger.Log().Debug("Error getting hash int64", logger.StringField("key", key), logger.StringField("field", field), logger.ErrorField("error", err))
-		metrics.GetInstance().RecordCacheMiss("redis_hget", configmanager.GetInstance().ServiceLBName)
 	} else {
-		metrics.GetInstance().RecordCacheHit("redis_hget", configmanager.GetInstance().ServiceLBName)
 	}
 	return data, err
 }
@@ -962,9 +874,7 @@ func (cache *RedisCache) HashMGet(ctx context.Context, key string, field []inter
 	data, err := redis.Strings(c.Do("HMGET", append([]interface{}{configmanager.GetInstance().DeploymentEnv + key}, field...)...))
 	if err != nil {
 		logger.Log().Debug("Error getting hash", logger.StringField("key", key), logger.AnyField("field", field), logger.ErrorField("error", err))
-		metrics.GetInstance().RecordCacheMiss("redis_hmget", configmanager.GetInstance().ServiceLBName)
 	} else {
-		metrics.GetInstance().RecordCacheHit("redis_hmget", configmanager.GetInstance().ServiceLBName)
 	}
 	return data
 }
@@ -978,9 +888,7 @@ func (cache *RedisCache) HashMGetInts(ctx context.Context, key string, field []i
 	defer c.Close()
 	data, err := redis.Ints(c.Do("HMGET", append([]interface{}{configmanager.GetInstance().DeploymentEnv + key}, field...)...))
 	if err != nil {
-		metrics.GetInstance().RecordCacheMiss("redis_hmget", configmanager.GetInstance().ServiceLBName)
 	} else {
-		metrics.GetInstance().RecordCacheHit("redis_hmget", configmanager.GetInstance().ServiceLBName)
 	}
 	return data
 }
@@ -994,9 +902,7 @@ func (cache *RedisCache) HashIncrementBy(ctx context.Context, key string, field 
 	defer c.Close()
 	value, err := redis.Int64(c.Do("HINCRBY", configmanager.GetInstance().DeploymentEnv+key, field, val))
 	if err != nil {
-		metrics.GetInstance().RecordCacheMiss("redis_hincrby", configmanager.GetInstance().ServiceLBName)
 	} else {
-		metrics.GetInstance().RecordCacheHit("redis_hincrby", configmanager.GetInstance().ServiceLBName)
 	}
 	return value
 }
@@ -1009,9 +915,7 @@ func (cache *RedisCache) HashIncrementByFloat(ctx context.Context, key string, f
 	defer c.Close()
 	value, err := redis.Int64(c.Do("HINCRBYFLOAT", configmanager.GetInstance().DeploymentEnv+key, field, val))
 	if err != nil {
-		metrics.GetInstance().RecordCacheMiss("redis_hincrbyfloat", configmanager.GetInstance().ServiceLBName)
 	} else {
-		metrics.GetInstance().RecordCacheHit("redis_hincrbyfloat", configmanager.GetInstance().ServiceLBName)
 	}
 	return value
 }
@@ -1025,9 +929,7 @@ func (cache *RedisCache) Exists(ctx context.Context, key string) (bool, error) {
 	defer c.Close()
 	data, err := redis.Bool(c.Do("EXISTS", configmanager.GetInstance().DeploymentEnv+key))
 	if err != nil {
-		metrics.GetInstance().RecordCacheMiss("redis_exists", configmanager.GetInstance().ServiceLBName)
 	} else {
-		metrics.GetInstance().RecordCacheHit("redis_exists", configmanager.GetInstance().ServiceLBName)
 		return false, err
 	}
 	return data, nil
@@ -1043,9 +945,7 @@ func (cache *RedisCache) ZAdd(ctx context.Context, key string, seq int64, value 
 	_, err := c.Do("ZADD", configmanager.GetInstance().DeploymentEnv+key, seq, value)
 	if err != nil {
 		logger.Log().Debug("Error adding to  set", logger.StringField("key", key), logger.ErrorField("error", err))
-		metrics.GetInstance().RecordCacheMiss("redis_zadd", configmanager.GetInstance().ServiceLBName)
 	} else {
-		metrics.GetInstance().RecordCacheHit("redis_zadd", configmanager.GetInstance().ServiceLBName)
 	}
 	return err
 }
@@ -1058,7 +958,6 @@ func (cache *RedisCache) ZRange(ctx context.Context, key string, start int, end 
 	defer c.Close()
 	data, err := redis.Strings(c.Do("ZRANGE", configmanager.GetInstance().DeploymentEnv+key, start, end))
 	if err != nil {
-		metrics.GetInstance().RecordCacheMiss("redis_zrange", configmanager.GetInstance().ServiceLBName)
 	}
 	return data
 }
@@ -1071,7 +970,6 @@ func (cache *RedisCache) ZRangeWithScore(ctx context.Context, key string, start 
 	defer c.Close()
 	data, err := redis.Strings(c.Do("ZRANGEBYSCORE", configmanager.GetInstance().DeploymentEnv+key, start, end))
 	if err != nil {
-		metrics.GetInstance().RecordCacheMiss("redis_zrange_with_score", configmanager.GetInstance().ServiceLBName)
 	}
 	return data
 
@@ -1085,7 +983,6 @@ func (cache *RedisCache) ZRevRange(ctx context.Context, key string, start int, e
 	defer c.Close()
 	data, err := redis.Strings(c.Do("ZREVRANGE", configmanager.GetInstance().DeploymentEnv+key, start, end))
 	if err != nil {
-		metrics.GetInstance().RecordCacheMiss("redis_zrevrange", configmanager.GetInstance().ServiceLBName)
 	}
 	return data
 }
@@ -1098,7 +995,6 @@ func (cache *RedisCache) ZRevRangeWithScore(ctx context.Context, key string, sta
 	defer c.Close()
 	data, err := redis.Strings(c.Do("ZREVRANGEBYSCORE", configmanager.GetInstance().DeploymentEnv+key, start, end))
 	if err != nil {
-		metrics.GetInstance().RecordCacheMiss("redis_zrevrange_with_score", configmanager.GetInstance().ServiceLBName)
 	}
 	return data
 }
@@ -1110,7 +1006,6 @@ func (cache *RedisCache) ZRem(ctx context.Context, key string, value ...interfac
 	defer c.Close()
 	_, err := c.Do("ZREM", configmanager.GetInstance().DeploymentEnv+key, value)
 	if err != nil {
-		metrics.GetInstance().RecordCacheMiss("redis_zrem", configmanager.GetInstance().ServiceLBName)
 	}
 	return err
 }
@@ -1122,7 +1017,6 @@ func (cache *RedisCache) ZRemRangeByScore(ctx context.Context, key string, start
 	defer c.Close()
 	_, err := c.Do("ZREMRANGEBYSCORE", configmanager.GetInstance().DeploymentEnv+key, start, end)
 	if err != nil {
-		metrics.GetInstance().RecordCacheMiss("redis_zremrangebyscore", configmanager.GetInstance().ServiceLBName)
 	}
 	return err
 }
@@ -1134,7 +1028,6 @@ func (cache *RedisCache) ZCount(ctx context.Context, key string, start int, end 
 	defer c.Close()
 	data, err := redis.Int64(c.Do("ZCOUNT", configmanager.GetInstance().DeploymentEnv+key, start, end))
 	if err != nil {
-		metrics.GetInstance().RecordCacheMiss("redis_zcount", configmanager.GetInstance().ServiceLBName)
 	}
 	return data, err
 }
@@ -1146,7 +1039,6 @@ func (cache *RedisCache) ZCard(ctx context.Context, key string) (int64, error) {
 	defer c.Close()
 	data, err := redis.Int64(c.Do("ZCARD", configmanager.GetInstance().DeploymentEnv+key))
 	if err != nil {
-		metrics.GetInstance().RecordCacheMiss("redis_zcard", configmanager.GetInstance().ServiceLBName)
 	}
 	return data, err
 }
@@ -1158,7 +1050,6 @@ func (cache *RedisCache) ZScore(ctx context.Context, key string, member string) 
 	defer c.Close()
 	data, err := redis.Float64(c.Do("ZSCORE", configmanager.GetInstance().DeploymentEnv+key, member))
 	if err != nil {
-		metrics.GetInstance().RecordCacheMiss("redis_zscore", configmanager.GetInstance().ServiceLBName)
 	}
 	return data, err
 }
@@ -1170,7 +1061,6 @@ func (cache *RedisCache) ZRangeByScoreWithLimit(ctx context.Context, key string,
 	defer c.Close()
 	data, err := redis.Strings(c.Do("ZRANGEBYSCORE", configmanager.GetInstance().DeploymentEnv+key, start, end, "LIMIT", 0, limit))
 	if err != nil {
-		metrics.GetInstance().RecordCacheMiss("redis_zrangebyscore_with_limit", configmanager.GetInstance().ServiceLBName)
 	}
 	return data
 }
@@ -1182,7 +1072,6 @@ func (cache *RedisCache) ZRevRangeByScoreWithLimit(ctx context.Context, key stri
 	defer c.Close()
 	data, err := redis.Strings(c.Do("ZREVRANGEBYSCORE", configmanager.GetInstance().DeploymentEnv+key, start, end, "LIMIT", 0, limit))
 	if err != nil {
-		metrics.GetInstance().RecordCacheMiss("redis_zrevrangebyscore_with_limit", configmanager.GetInstance().ServiceLBName)
 	}
 	return data
 }
@@ -1196,7 +1085,6 @@ func (cache *RedisCache) ZPaginate(ctx context.Context, key string, page int, li
 	defer c.Close()
 	data, err := redis.Strings(c.Do("ZRANGEBYSCORE", configmanager.GetInstance().DeploymentEnv+key, start, end, "LIMIT", 0, limit))
 	if err != nil {
-		metrics.GetInstance().RecordCacheMiss("redis_zrangebyscore_with_limit", configmanager.GetInstance().ServiceLBName)
 	}
 	return data, err
 }
@@ -1217,7 +1105,6 @@ func (cache *RedisCache) ZMultiAdd(ctx context.Context, key string, items []cach
 
 	_, err := c.Do("ZADD", args...)
 	if err != nil {
-		metrics.GetInstance().RecordCacheMiss("redis_zmultiadd", configmanager.GetInstance().ServiceLBName)
 	}
 	return err
 }
@@ -1239,7 +1126,6 @@ func (cache *RedisCache) ZUnion(ctx context.Context, key string, keys ...string)
 
 	data, err := redis.Strings(c.Do("ZUNION", args...))
 	if err != nil {
-		metrics.GetInstance().RecordCacheMiss("redis_zunion", configmanager.GetInstance().ServiceLBName)
 	}
 	return data
 }
@@ -1267,7 +1153,6 @@ func (cache *RedisCache) ZUnionWithExpire(ctx context.Context, key string, expir
 	data = cache.ZRangeByScoreWithLimit(ctx, key, start, end, limit)
 
 	if err != nil {
-		metrics.GetInstance().RecordCacheMiss("redis_zunion", configmanager.GetInstance().ServiceLBName)
 	}
 	return data
 }

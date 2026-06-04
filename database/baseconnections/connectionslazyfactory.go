@@ -8,10 +8,8 @@ import (
 	"time"
 
 	"github.com/glodb/keel/database/basetypes"
-	"github.com/glodb/keel/settings/configmanager"
 	"github.com/glodb/keel/settings/errors"
 	"github.com/glodb/keel/settings/logger"
-	"github.com/glodb/keel/settings/metrics"
 )
 
 // ConnectionPool manages database connections with proper lifecycle management
@@ -353,10 +351,6 @@ func (dc *dbConnections) GetConnection(dbType basetypes.DbType) ConnectionInterf
 			logger.ErrorField("error", err))
 		return nil
 	}
-
-	// Calculate total DB connections and update metrics
-	totalConnections := dc.pool.GetConnectionCount()
-	metrics.GetInstance().RecordDBConnections(dbType.String(), configmanager.GetInstance().ServiceLBName, float64(totalConnections))
 
 	return connection
 }

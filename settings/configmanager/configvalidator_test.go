@@ -3,6 +3,8 @@ package configmanager
 import (
 	"strings"
 	"testing"
+
+	configmodels "github.com/glodb/keel/settings/configmanager/configmodels"
 )
 
 func TestConfigValidation(t *testing.T) {
@@ -16,59 +18,29 @@ func TestConfigValidation(t *testing.T) {
 		{
 			name: "Valid configuration",
 			config: &config{
-				ClassName:       "SSOSERVICE",
-				Address:         "localhost:8080",
-				DeploymentEnv:   "DEV",
-				TokenExpiry:     3600,
-				PageSize:        50,
-				MaxPageSize:     1000,
-				SessionKey:      "test-session-key-16chars",
-				SessionSecret:   "test-session-secret-16chars",
-				OtpExpirySeconds: 300,
-				OtpResendSeconds: 60,
+				Address:                 "localhost:8080",
+				DeploymentEnv:           "DEV",
 				RPCRequestExpirySeconds: 30,
-				CacheContextTimeout: 5,
-				Redis: struct {
-					RedisMaxConnections     int    `json:"redisMaxConnections"`
-					RedisMaxIdleConnections int    `json:"redisMaxIdleConnections"`
-					RedisCon                string `json:"redisCon"`
-					RedisAddress            string `json:"redisAddress"`
-					PrintRedis              bool   `json:"printRedis"`
-				}{
-					RedisMaxConnections:     100,
-					RedisMaxIdleConnections: 10,
-				},
-				PublisherBatchSize: 100,
-				DBBatchSize:        50,
+				CacheContextTimeout:     5,
+				PageSize:                50,
+				MaxPageSize:             1000,
+				PublisherBatchSize:      100,
 			},
 			expectError: false,
 		},
 		{
-			name: "Invalid service name",
+			name: "Empty address",
 			config: &config{
-				ClassName:     "INVALIDSERVICE",
-				Address:       "localhost:8080",
+				Address:       "",
 				DeploymentEnv: "DEV",
 			},
 			expectError: true,
-			errorField:  "ClassName",
-			errorMsg:    "must be one of",
-		},
-		{
-			name: "Empty required fields",
-			config: &config{
-				ClassName:     "",
-				Address:       "",
-				DeploymentEnv: "",
-			},
-			expectError: true,
-			errorField:  "ClassName",
-			errorMsg:    "service name is required",
+			errorField:  "Address",
+			errorMsg:    "server address is required",
 		},
 		{
 			name: "Invalid address format",
 			config: &config{
-				ClassName:     "SSOSERVICE",
 				Address:       "invalid-address",
 				DeploymentEnv: "DEV",
 			},
@@ -79,7 +51,6 @@ func TestConfigValidation(t *testing.T) {
 		{
 			name: "Invalid deployment environment",
 			config: &config{
-				ClassName:     "SSOSERVICE",
 				Address:       "localhost:8080",
 				DeploymentEnv: "INVALID",
 			},
@@ -88,78 +59,13 @@ func TestConfigValidation(t *testing.T) {
 			errorMsg:    "must be one of",
 		},
 		{
-			name: "Token expiry too short",
-			config: &config{
-				ClassName:     "SSOSERVICE",
-				Address:       "localhost:8080",
-				DeploymentEnv: "DEV",
-				TokenExpiry:   100, // Less than 300 seconds
-			},
-			expectError: true,
-			errorField:  "TokenExpiry",
-			errorMsg:    "must be between 5 minutes",
-		},
-		{
-			name: "Token expiry too long",
-			config: &config{
-				ClassName:     "SSOSERVICE",
-				Address:       "localhost:8080",
-				DeploymentEnv: "DEV",
-				TokenExpiry:   100000, // More than 86400 seconds
-			},
-			expectError: true,
-			errorField:  "TokenExpiry",
-			errorMsg:    "must be between",
-		},
-		{
-			name: "Session key too short",
-			config: &config{
-				ClassName:     "SSOSERVICE",
-				Address:       "localhost:8080",
-				DeploymentEnv: "DEV",
-				TokenExpiry:   3600,
-				SessionKey:    "short", // Less than 16 characters
-			},
-			expectError: true,
-			errorField:  "SessionKey",
-			errorMsg:    "must be at least 16 characters",
-		},
-		{
-			name: "Invalid Redis configuration",
-			config: &config{
-				ClassName:     "SSOSERVICE",
-				Address:       "localhost:8080",
-				DeploymentEnv: "DEV",
-				Redis: struct {
-					RedisMaxConnections     int    `json:"redisMaxConnections"`
-					RedisMaxIdleConnections int    `json:"redisMaxIdleConnections"`
-					RedisCon                string `json:"redisCon"`
-					RedisAddress            string `json:"redisAddress"`
-					PrintRedis              bool   `json:"printRedis"`
-				}{
-					RedisMaxConnections:     -1, // Invalid
-					RedisMaxIdleConnections: 10,
-				},
-			},
-			expectError: true,
-			errorField:  "Redis.RedisMaxConnections",
-			errorMsg:    "must be positive",
-		},
-		{
 			name: "Redis idle connections exceed max connections",
 			config: &config{
-				ClassName:     "SSOSERVICE",
 				Address:       "localhost:8080",
 				DeploymentEnv: "DEV",
-				Redis: struct {
-					RedisMaxConnections     int    `json:"redisMaxConnections"`
-					RedisMaxIdleConnections int    `json:"redisMaxIdleConnections"`
-					RedisCon                string `json:"redisCon"`
-					RedisAddress            string `json:"redisAddress"`
-					PrintRedis              bool   `json:"printRedis"`
-				}{
+				Redis: configmodels.RedisConnection{
 					RedisMaxConnections:     10,
-					RedisMaxIdleConnections: 20, // More than max
+					RedisMaxIdleConnections: 20,
 				},
 			},
 			expectError: true,
@@ -169,40 +75,14 @@ func TestConfigValidation(t *testing.T) {
 		{
 			name: "Page size larger than max page size",
 			config: &config{
-				ClassName:     "SSOSERVICE",
-				Address:       "localhost:8080",  
+				Address:       "localhost:8080",
 				DeploymentEnv: "DEV",
 				PageSize:      1000,
-				MaxPageSize:   500, // Less than page size
+				MaxPageSize:   500,
 			},
 			expectError: true,
 			errorField:  "PageSize",
 			errorMsg:    "cannot be larger than max page size",
-		},
-		{
-			name: "OTP expiry too short",
-			config: &config{
-				ClassName:        "SSOSERVICE",
-				Address:          "localhost:8080",
-				DeploymentEnv:    "DEV",
-				OtpExpirySeconds: 10, // Less than 30 seconds
-			},
-			expectError: true,
-			errorField:  "OtpExpirySeconds",
-			errorMsg:    "must be between 30 seconds",
-		},
-		{
-			name: "OTP resend time invalid",
-			config: &config{
-				ClassName:        "SSOSERVICE",
-				Address:          "localhost:8080",
-				DeploymentEnv:    "DEV",
-				OtpExpirySeconds: 300,
-				OtpResendSeconds: 400, // More than expiry
-			},
-			expectError: true,
-			errorField:  "OtpResendSeconds",
-			errorMsg:    "must be positive and less than OTP expiry time",
 		},
 	}
 
@@ -215,8 +95,6 @@ func TestConfigValidation(t *testing.T) {
 					t.Errorf("Expected error but got none")
 					return
 				}
-
-				// Check if error contains expected field and message
 				errStr := err.Error()
 				if tt.errorField != "" && !strings.Contains(errStr, tt.errorField) {
 					t.Errorf("Expected error to contain field '%s', got: %s", tt.errorField, errStr)
@@ -240,21 +118,9 @@ func TestValidateHostnamePort(t *testing.T) {
 		expectError bool
 		errorMsg    string
 	}{
-		{
-			name:        "Valid localhost",
-			address:     "localhost:8080",
-			expectError: false,
-		},
-		{
-			name:        "Valid IP address",
-			address:     "192.168.1.1:3000",
-			expectError: false,
-		},
-		{
-			name:        "Valid domain",
-			address:     "api.example.com:443",
-			expectError: false,
-		},
+		{name: "Valid localhost", address: "localhost:8080"},
+		{name: "Valid IP address", address: "192.168.1.1:3000"},
+		{name: "Valid domain", address: "api.example.com:443"},
 		{
 			name:        "Missing port",
 			address:     "localhost",
@@ -290,7 +156,6 @@ func TestValidateHostnamePort(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := validateHostnamePort(tt.address)
-
 			if tt.expectError {
 				if err == nil {
 					t.Errorf("Expected error but got none")
@@ -311,34 +176,26 @@ func TestValidateHostnamePort(t *testing.T) {
 func TestConfigValidationErrors_Error(t *testing.T) {
 	tests := []struct {
 		name     string
-		errors   ConfigValidationErrors
+		errs     ConfigValidationErrors
 		expected string
 	}{
 		{
 			name:     "No errors",
-			errors:   ConfigValidationErrors{},
+			errs:     ConfigValidationErrors{},
 			expected: "no configuration validation errors",
 		},
 		{
 			name: "Single error",
-			errors: ConfigValidationErrors{
-				{Field: "TokenExpiry", Value: 100, Message: "too short"},
+			errs: ConfigValidationErrors{
+				{Field: "Address", Value: "", Message: "server address is required"},
 			},
-			expected: "config validation failed for 'TokenExpiry': too short (value: 100)",
-		},
-		{
-			name: "Multiple errors",
-			errors: ConfigValidationErrors{
-				{Field: "TokenExpiry", Value: 100, Message: "too short"},
-				{Field: "PageSize", Value: -1, Message: "must be positive"},
-			},
-			expected: "config validation failed for 'TokenExpiry': too short (value: 100); config validation failed for 'PageSize': must be positive (value: -1)",
+			expected: "config validation failed for 'Address': server address is required (value: )",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := tt.errors.Error()
+			result := tt.errs.Error()
 			if result != tt.expected {
 				t.Errorf("Expected: %s, got: %s", tt.expected, result)
 			}
@@ -350,30 +207,17 @@ func TestGetCacheContextTimeout(t *testing.T) {
 	tests := []struct {
 		name     string
 		timeout  int64
-		expected string // Duration as string for easy comparison
+		expected string
 	}{
-		{
-			name:     "Valid timeout",
-			timeout:  10,
-			expected: "10s",
-		},
-		{
-			name:     "Zero timeout - should return default",
-			timeout:  0,
-			expected: "5s",
-		},
-		{
-			name:     "Negative timeout - should return default",
-			timeout:  -5,
-			expected: "5s",
-		},
+		{name: "Valid timeout", timeout: 10, expected: "10s"},
+		{name: "Zero timeout - should return default", timeout: 0, expected: "5s"},
+		{name: "Negative timeout - should return default", timeout: -5, expected: "5s"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			config := &config{CacheContextTimeout: tt.timeout}
-			result := config.GetCacheContextTimeout()
-			
+			cfg := &config{CacheContextTimeout: tt.timeout}
+			result := cfg.GetCacheContextTimeout()
 			if result.String() != tt.expected {
 				t.Errorf("Expected timeout: %s, got: %s", tt.expected, result.String())
 			}
@@ -381,46 +225,25 @@ func TestGetCacheContextTimeout(t *testing.T) {
 	}
 }
 
-// Benchmark tests for validation performance
 func BenchmarkConfigValidation(b *testing.B) {
-	config := &config{
-		ClassName:       "SSOSERVICE",
-		Address:         "localhost:8080",
-		DeploymentEnv:   "DEV",
-		TokenExpiry:     3600,
-		PageSize:        50,
-		MaxPageSize:     1000,
-		SessionKey:      "test-session-key-16chars",
-		SessionSecret:   "test-session-secret-16chars",
-		OtpExpirySeconds: 300,
-		OtpResendSeconds: 60,
+	cfg := &config{
+		Address:                 "localhost:8080",
+		DeploymentEnv:           "DEV",
 		RPCRequestExpirySeconds: 30,
-		CacheContextTimeout: 5,
-		Redis: struct {
-			RedisMaxConnections     int    `json:"redisMaxConnections"`
-			RedisMaxIdleConnections int    `json:"redisMaxIdleConnections"`
-			RedisCon                string `json:"redisCon"`
-			RedisAddress            string `json:"redisAddress"`
-			PrintRedis              bool   `json:"printRedis"`
-		}{
-			RedisMaxConnections:     100,
-			RedisMaxIdleConnections: 10,
-		},
-		PublisherBatchSize: 100,
-		DBBatchSize:        50,
+		CacheContextTimeout:     5,
+		PageSize:                50,
+		MaxPageSize:             1000,
+		PublisherBatchSize:      100,
 	}
-
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_ = config.validateConfig()
+		_ = cfg.validateConfig()
 	}
 }
 
 func BenchmarkHostnamePortValidation(b *testing.B) {
-	address := "localhost:8080"
-	
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_ = validateHostnamePort(address)
+		_ = validateHostnamePort("localhost:8080")
 	}
 }

@@ -7,7 +7,7 @@ import (
 	"runtime/debug"
 	"sync"
 
-	"github.com/glodb/keel/app/models/socketmodels"
+	"github.com/glodb/keel/models/socketmodels"
 	"github.com/glodb/keel/settings/logger"
 	"github.com/glodb/keel/settings/socket.io/socketevents"
 	"github.com/glodb/keel/settings/utilsdatatypes"

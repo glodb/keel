@@ -5,9 +5,9 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/glodb/keel/app/models/genericmodels"
-	"github.com/glodb/keel/app/models/paginationmodels/arraypagination"
-	"github.com/glodb/keel/app/models/paginationmodels/paginationinterface"
+	"github.com/glodb/keel/models/genericmodels"
+	"github.com/glodb/keel/models/paginationmodels/arraypagination"
+	"github.com/glodb/keel/models/paginationmodels/paginationinterface"
 	"github.com/glodb/keel/settings/configmanager"
 	"github.com/glodb/keel/settings/customtypes"
 

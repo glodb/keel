@@ -21,7 +21,6 @@ require (
 	github.com/prometheus/client_golang v1.22.0
 	github.com/rafaeljusto/redigomock/v3 v3.1.3
 	github.com/rs/xid v1.5.0
-	github.com/twilio/twilio-go v1.22.4
 	go.mongodb.org/mongo-driver v1.14.0
 	go.opentelemetry.io/otel v1.38.0
 	go.opentelemetry.io/otel/exporters/jaeger v1.17.0

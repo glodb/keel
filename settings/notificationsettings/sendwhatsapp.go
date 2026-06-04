@@ -3,16 +3,14 @@ package notificationsettings
 import (
 	"context"
 
-	"github.com/glodb/keel/app/models/notificationmodels"
+	"github.com/glodb/keel/models/notificationmodels"
 
-	"github.com/twilio/twilio-go"
 	"golang.org/x/sync/semaphore"
 )
 
 type WhatsappSender struct {
 	sendWhatsapp bool
 	initialised  bool
-	twilioClinet *twilio.RestClient
 	semaphore    *semaphore.Weighted
 }
 

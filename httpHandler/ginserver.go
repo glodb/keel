@@ -12,7 +12,6 @@ import (
 	"github.com/glodb/keel/middlewares/basemiddlewares"
 	"github.com/glodb/keel/settings/configmanager"
 	"github.com/glodb/keel/settings/logger"
-	"github.com/glodb/keel/settings/metrics"
 	"github.com/glodb/keel/settings/tracing"
 
 	"github.com/gin-gonic/gin"
@@ -139,9 +138,6 @@ func (u *GINServer) Start() error {
 		}
 	}()
 
-	// Start metrics server in background
-	go u.startMetricsServer()
-
 	// Start main server
 	go func() {
 		if err := u.engine.Run(":8080"); err != nil && err != http.ErrServerClosed {
@@ -160,21 +156,3 @@ func (u *GINServer) Start() error {
 	return nil
 }
 
-// startMetricsServer starts a separate server for metrics
-func (u *GINServer) startMetricsServer() {
-	metricsPort := configmanager.GetInstance().MetricsPort
-	if metricsPort == "" {
-		metricsPort = "9090"
-	}
-
-	metricsServer := &http.Server{
-		Addr:    ":" + metricsPort,
-		Handler: metrics.GetInstance().GetMetricsHandler(),
-	}
-
-	logger.Log().Info("Starting metrics server", logger.StringField("port", metricsPort))
-
-	if err := metricsServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		logger.Log().Error("Failed to start metrics server", logger.ErrorField("err", err))
-	}
-}

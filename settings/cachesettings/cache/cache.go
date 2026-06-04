@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/glodb/keel/app/models/cachemodels"
+	"github.com/glodb/keel/models/cachemodels"
 
 	"github.com/gomodule/redigo/redis"
 )

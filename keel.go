@@ -3,7 +3,7 @@ package keel
 import (
 	"fmt"
 	"net/http"
-	_ "net/http/pprof" // Import pprof for profiling
+	nhpprof "net/http/pprof"
 	"runtime/debug"
 	"time"
 
@@ -61,9 +61,19 @@ func Boot(env, service string) (err error) {
 	}, "tracing initialization")
 
 	if configmanager.GetInstance().UsePprof {
+		mux := http.NewServeMux()
+		mux.HandleFunc("/debug/pprof/", nhpprof.Index)
+		mux.HandleFunc("/debug/pprof/cmdline", nhpprof.Cmdline)
+		mux.HandleFunc("/debug/pprof/profile", nhpprof.Profile)
+		mux.HandleFunc("/debug/pprof/symbol", nhpprof.Symbol)
+		mux.HandleFunc("/debug/pprof/trace", nhpprof.Trace)
+		addr := configmanager.GetInstance().PprofAddress
+		if addr == "" {
+			addr = ":6060"
+		}
 		panicrecovery.SafeGo(func() {
-			logger.Log().Info("Starting pprof on :6060")
-			if err := http.ListenAndServe("0.0.0.0:6060", nil); err != nil {
+			logger.Log().Info("Starting pprof server", logger.StringField("addr", addr))
+			if err := http.ListenAndServe(addr, mux); err != nil {
 				logger.Log().Error("pprof server error", logger.ErrorField("error", err))
 			}
 		}, "pprof server")

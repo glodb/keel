@@ -3,7 +3,7 @@ package serviceutils
 import (
 	"sync"
 
-	"github.com/glodb/keel/app/models/rpcreplymodels/rpcinterface"
+	"github.com/glodb/keel/models/rpcreplymodels/rpcinterface"
 	"github.com/glodb/keel/settings/configmanager"
 	"github.com/glodb/keel/settings/logger"
 

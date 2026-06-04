@@ -8,7 +8,6 @@ import (
 
 	"github.com/glodb/keel/settings/errors"
 	"github.com/glodb/keel/settings/logger"
-	"github.com/glodb/keel/settings/metrics"
 )
 
 // State represents the current state of the circuit breaker
@@ -114,7 +113,6 @@ type CircuitBreaker struct {
 	counts  Counts
 	expiry  time.Time
 	logger  *logger.Logger
-	metrics *metrics.Metrics
 }
 
 // NewCircuitBreaker creates a new circuit breaker with the given configuration
@@ -123,7 +121,6 @@ func NewCircuitBreaker(config Config) *CircuitBreaker {
 		config:  config,
 		state:   StateClosed,
 		logger:  logger.Log(),
-		metrics: metrics.GetInstance(),
 	}
 
 	// Set default values
@@ -193,7 +190,6 @@ func (cb *CircuitBreaker) beforeRequest() error {
 	state, counts := cb.currentState(now)
 
 	if state == StateOpen {
-		cb.metrics.RecordError("circuit_breaker_open", cb.config.Name, "circuit_breaker")
 		return errors.NewAppError(
 			errors.ErrCodeCircuitBreakerOpen,
 			fmt.Sprintf("Circuit breaker '%s' is open", cb.config.Name),
@@ -204,7 +200,6 @@ func (cb *CircuitBreaker) beforeRequest() error {
 	}
 
 	if state == StateHalfOpen && counts.Requests >= cb.config.MaxRequests {
-		cb.metrics.RecordError("circuit_breaker_half_open_max_requests", cb.config.Name, "circuit_breaker")
 		return errors.NewAppError(
 			errors.ErrCodeCircuitBreakerOpen,
 			fmt.Sprintf("Circuit breaker '%s' is half-open with max requests reached", cb.config.Name),
@@ -229,14 +224,12 @@ func (cb *CircuitBreaker) afterRequest(success bool) {
 
 	if success {
 		cb.counts.OnSuccess()
-		cb.metrics.RecordAPICall("circuit_breaker_success", "execute", "success", cb.config.Name, 0)
 
 		if state == StateHalfOpen && cb.counts.ConsecutiveSuccesses >= cb.config.MaxRequests {
 			cb.setState(StateClosed, now)
 		}
 	} else {
 		cb.counts.OnFailure()
-		cb.metrics.RecordError("circuit_breaker_failure", cb.config.Name, "circuit_breaker")
 
 		if cb.config.ReadyToTrip(cb.counts) {
 			cb.setState(StateOpen, now)
@@ -291,7 +284,6 @@ func (cb *CircuitBreaker) setState(state State, now time.Time) {
 	}
 
 	// Record metrics
-	cb.metrics.RecordAPICall("circuit_breaker_state_change", "state_change", state.String(), cb.config.Name, 0)
 }
 
 // GetState returns the current state of the circuit breaker

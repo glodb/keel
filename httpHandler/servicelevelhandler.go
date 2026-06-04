@@ -7,18 +7,12 @@ import (
 	"time"
 
 	"github.com/glodb/keel/settings/configmanager"
-	"github.com/glodb/keel/settings/metrics"
 	"github.com/glodb/keel/settings/openapi"
 
 	"github.com/gin-gonic/gin"
 )
 
 func (u *GINServer) HandleServiceLevelHandlers() {
-	// Initialize observability
-	metricsInstance := metrics.GetInstance()
-	// Add metrics endpoint
-	u.engine.GET(fmt.Sprintf("/%s/metrics", configmanager.GetInstance().ServiceLBName), gin.WrapH(metricsInstance.GetMetricsHandler()))
-
 	// Add health check endpoint
 	u.engine.GET(fmt.Sprintf("/%s/health", configmanager.GetInstance().ServiceLBName), func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{

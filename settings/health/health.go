@@ -13,7 +13,6 @@ import (
 	"github.com/glodb/keel/settings/circuitbreaker"
 	"github.com/glodb/keel/settings/errors"
 	"github.com/glodb/keel/settings/logger"
-	"github.com/glodb/keel/settings/metrics"
 )
 
 // Status represents the health status
@@ -93,7 +92,6 @@ type HealthChecker struct {
 	checks         map[string]*Check
 	mutex          sync.RWMutex
 	logger         *logger.Logger
-	metrics        *metrics.Metrics
 	ticker         *time.Ticker
 	stopChan       chan struct{}
 	running        bool
@@ -120,7 +118,6 @@ func NewHealthChecker(serviceName, serviceVersion string) *HealthChecker {
 		startTime:      time.Now(),
 		checks:         make(map[string]*Check),
 		logger:         logger.Log(),
-		metrics:        metrics.GetInstance(),
 		stopChan:       make(chan struct{}),
 	}
 
@@ -330,10 +327,8 @@ func (hc *HealthChecker) executeCheck(ctx context.Context, check *Check) (*Check
 
 	// Record metrics
 	statusStr := string(status)
-	hc.metrics.RecordAPICall("health_check", "execute", statusStr, hc.serviceName, duration)
 
 	if status == StatusUnhealthy || status == StatusDegraded {
-		hc.metrics.RecordError("health_check_failed", check.Name, "health_checker")
 	}
 
 	hc.logger.Debug("Health check executed",
@@ -545,7 +540,6 @@ func (hc *HealthChecker) StartPeriodicChecks(interval time.Duration) {
 						logger.IntField("checks_count", len(report.Checks)))
 
 					// Record overall health status
-					hc.metrics.RecordAPICall("health_status", "periodic", string(report.Status), hc.serviceName, 0)
 				}
 
 			case <-hc.stopChan:

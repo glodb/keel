@@ -7,14 +7,13 @@ import (
 	"math"
 	"time"
 
-	"github.com/glodb/keel/app/models/genericmodels"
 	"github.com/glodb/keel/database/baseconnections"
 	"github.com/glodb/keel/database/basetypes"
 	"github.com/glodb/keel/httpHandler/controllers/baseinterfaces"
+	"github.com/glodb/keel/models/genericmodels"
 	"github.com/glodb/keel/settings/configmanager"
 	"github.com/glodb/keel/settings/customtypes"
 	"github.com/glodb/keel/settings/logger"
-	"github.com/glodb/keel/settings/metrics"
 	"github.com/glodb/keel/settings/utils"
 
 	"go.mongodb.org/mongo-driver/bson"
@@ -50,10 +49,8 @@ func (u *MongoDBFunctions) EnsureIndex(ctx context.Context, controller baseinter
 
 	conn := baseconnections.DBConnection().GetConnection(basetypes.MONGO).GetDB(basetypes.MONGO).(*mongo.Client)
 	_, err := conn.Database(string(controller.GetDBName())).Collection(string(controller.GetCollectionName())).Indexes().CreateOne(ctx, indexModel)
-	metrics.GetInstance().RecordDBOperation(configmanager.GetInstance().ServiceLBName, string(controller.GetDBName()), string(controller.GetCollectionName()), "ensureIndex", time.Since(start))
 	if err != nil {
 		logger.Log().Debug("MongoDB-EnsureIndex-Error", logger.StringField("collection", string(controller.GetCollectionName())), logger.StringField("db", string(controller.GetDBName())), logger.ErrorField("error", err))
-		metrics.GetInstance().RecordDBOperationFailed("ensureIndex", string(controller.GetCollectionName()), configmanager.GetInstance().ServiceLBName)
 	}
 	logger.Log().Debug("MongoDB-EnsureIndex-End", logger.StringField("collection", string(controller.GetCollectionName())), logger.StringField("db", string(controller.GetDBName())), logger.StringField("duration", time.Since(start).String()))
 	return err
@@ -64,10 +61,8 @@ func (u *MongoDBFunctions) Add(ctx context.Context, controller baseinterfaces.Co
 	start := time.Now()
 	conn := baseconnections.DBConnection().GetConnection(basetypes.MONGO).GetDB(basetypes.MONGO).(*mongo.Client)
 	_, err := conn.Database(string(controller.GetDBName())).Collection(string(controller.GetCollectionName())).InsertOne(ctx, data)
-	metrics.GetInstance().RecordDBOperation(configmanager.GetInstance().ServiceLBName, string(controller.GetDBName()), string(controller.GetCollectionName()), "add", time.Since(start))
 	if err != nil {
 		logger.Log().Debug("MongoDB-Add-Error", logger.StringField("collection", string(controller.GetCollectionName())), logger.StringField("db", string(controller.GetDBName())), logger.ErrorField("error", err))
-		metrics.GetInstance().RecordDBOperationFailed("add", string(controller.GetCollectionName()), configmanager.GetInstance().ServiceLBName)
 	}
 	logger.Log().Debug("MongoDB-Add-End", logger.StringField("collection", string(controller.GetCollectionName())), logger.StringField("db", string(controller.GetDBName())), logger.StringField("duration", time.Since(start).String()))
 	return -1, err
@@ -78,10 +73,8 @@ func (u *MongoDBFunctions) AddMany(ctx context.Context, controller baseinterface
 	start := time.Now()
 	conn := baseconnections.DBConnection().GetConnection(basetypes.MONGO).GetDB(basetypes.MONGO).(*mongo.Client)
 	_, err := conn.Database(string(controller.GetDBName())).Collection(string(controller.GetCollectionName())).InsertMany(ctx, dataArray)
-	metrics.GetInstance().RecordDBOperation(configmanager.GetInstance().ServiceLBName, string(controller.GetDBName()), string(controller.GetCollectionName()), "addMany", time.Since(start))
 	if err != nil {
 		logger.Log().Debug("MongoDB-AddMany-Error", logger.StringField("collection", string(controller.GetCollectionName())), logger.StringField("db", string(controller.GetDBName())), logger.ErrorField("error", err))
-		metrics.GetInstance().RecordDBOperationFailed("addMany", string(controller.GetCollectionName()), configmanager.GetInstance().ServiceLBName)
 	}
 	logger.Log().Debug("MongoDB-AddMany-End", logger.StringField("collection", string(controller.GetCollectionName())), logger.StringField("db", string(controller.GetDBName())), logger.StringField("duration", time.Since(start).String()))
 	return []int64{}, err
@@ -92,10 +85,8 @@ func (u *MongoDBFunctions) Count(ctx context.Context, controller baseinterfaces.
 	start := time.Now()
 	conn := baseconnections.DBConnection().GetConnection(basetypes.MONGO).GetDB(basetypes.MONGO).(*mongo.Client)
 	count, err := conn.Database(string(controller.GetDBName())).Collection(string(controller.GetCollectionName())).CountDocuments(ctx, condition)
-	metrics.GetInstance().RecordDBOperation(configmanager.GetInstance().ServiceLBName, string(controller.GetDBName()), string(controller.GetCollectionName()), "count", time.Since(start))
 	if err != nil {
 		logger.Log().Debug("MongoDB-Count-Error", logger.StringField("collection", string(controller.GetCollectionName())), logger.StringField("db", string(controller.GetDBName())), logger.ErrorField("error", err))
-		metrics.GetInstance().RecordDBOperationFailed("count", string(controller.GetCollectionName()), configmanager.GetInstance().ServiceLBName)
 	}
 	logger.Log().Debug("MongoDB-Count-End", logger.StringField("collection", string(controller.GetCollectionName())), logger.StringField("db", string(controller.GetDBName())), logger.StringField("duration", time.Since(start).String()))
 	return count, err
@@ -116,10 +107,8 @@ func (u *MongoDBFunctions) FindOne(ctx context.Context, controller baseinterface
 	}
 
 	err := conn.Database(string(controller.GetDBName())).Collection(string(controller.GetCollectionName())).FindOne(ctx, query, opts).Decode(result)
-	metrics.GetInstance().RecordDBOperation(configmanager.GetInstance().ServiceLBName, string(controller.GetDBName()), string(controller.GetCollectionName()), "findOne", time.Since(start))
 	if err != nil {
 		logger.Log().Debug("MongoDB-FindOne-Error", logger.StringField("collection", string(controller.GetCollectionName())), logger.StringField("db", string(controller.GetDBName())), logger.ErrorField("error", err))
-		metrics.GetInstance().RecordDBOperationFailed("findOne", string(controller.GetCollectionName()), configmanager.GetInstance().ServiceLBName)
 	}
 	logger.Log().Debug("MongoDB-FindOne-End", logger.StringField("collection", string(controller.GetCollectionName())), logger.StringField("db", string(controller.GetDBName())), logger.StringField("duration", time.Since(start).String()))
 	return err
@@ -142,10 +131,8 @@ func (u *MongoDBFunctions) FindOneAndUpdate(ctx context.Context, controller base
 	}
 	conn := baseconnections.DBConnection().GetConnection(basetypes.MONGO).GetDB(basetypes.MONGO).(*mongo.Client)
 	err := conn.Database(string(controller.GetDBName())).Collection(string(controller.GetCollectionName())).FindOneAndUpdate(ctx, query, update, opts).Decode(result)
-	metrics.GetInstance().RecordDBOperation(configmanager.GetInstance().ServiceLBName, string(controller.GetDBName()), string(controller.GetCollectionName()), "findOneAndUpdate", time.Since(start))
 	if err != nil {
 		logger.Log().Debug("MongoDB-FindOneAndUpdate-Error", logger.StringField("collection", string(controller.GetCollectionName())), logger.StringField("db", string(controller.GetDBName())), logger.ErrorField("error", err))
-		metrics.GetInstance().RecordDBOperationFailed("findOneAndUpdate", string(controller.GetCollectionName()), configmanager.GetInstance().ServiceLBName)
 	}
 	logger.Log().Debug("MongoDB-FindOneAndUpdate-End", logger.StringField("collection", string(controller.GetCollectionName())), logger.StringField("db", string(controller.GetDBName())), logger.StringField("duration", time.Since(start).String()))
 	return err
@@ -162,10 +149,8 @@ func (u *MongoDBFunctions) UpdateOne(ctx context.Context, controller baseinterfa
 			return errors.New("no record updated")
 		}
 	}
-	metrics.GetInstance().RecordDBOperation(configmanager.GetInstance().ServiceLBName, string(controller.GetDBName()), string(controller.GetCollectionName()), "updateOne", time.Since(start))
 	if err != nil {
 		logger.Log().Debug("MongoDB-UpdateOne-Error", logger.StringField("collection", string(controller.GetCollectionName())), logger.StringField("db", string(controller.GetDBName())), logger.ErrorField("error", err))
-		metrics.GetInstance().RecordDBOperationFailed("updateOne", string(controller.GetCollectionName()), configmanager.GetInstance().ServiceLBName)
 	}
 	logger.Log().Debug("MongoDB-UpdateOne-End", logger.StringField("collection", string(controller.GetCollectionName())), logger.StringField("db", string(controller.GetDBName())), logger.StringField("duration", time.Since(start).String()))
 	return err
@@ -184,10 +169,8 @@ func (u *MongoDBFunctions) UpdateMany(ctx context.Context, controller baseinterf
 		}
 		return updateResults.ModifiedCount, err
 	}
-	metrics.GetInstance().RecordDBOperation(configmanager.GetInstance().ServiceLBName, string(controller.GetDBName()), string(controller.GetCollectionName()), "updateMany", time.Since(start))
 	if err != nil {
 		logger.Log().Debug("MongoDB-UpdateMany-Error", logger.StringField("collection", string(controller.GetCollectionName())), logger.StringField("db", string(controller.GetDBName())), logger.ErrorField("error", err))
-		metrics.GetInstance().RecordDBOperationFailed("updateMany", string(controller.GetCollectionName()), configmanager.GetInstance().ServiceLBName)
 	}
 	logger.Log().Debug("MongoDB-UpdateMany-End", logger.StringField("collection", string(controller.GetCollectionName())), logger.StringField("db", string(controller.GetDBName())), logger.StringField("duration", time.Since(start).String()))
 	return 0, err
@@ -201,10 +184,8 @@ func (u *MongoDBFunctions) DeleteOne(ctx context.Context, controller baseinterfa
 	if deleteResult.DeletedCount == 0 {
 		return errors.New("no record deleted")
 	}
-	metrics.GetInstance().RecordDBOperation(configmanager.GetInstance().ServiceLBName, string(controller.GetDBName()), string(controller.GetCollectionName()), "deleteOne", time.Since(start))
 	if err != nil {
 		logger.Log().Debug("MongoDB-DeleteOne-Error", logger.StringField("collection", string(controller.GetCollectionName())), logger.StringField("db", string(controller.GetDBName())), logger.ErrorField("error", err))
-		metrics.GetInstance().RecordDBOperationFailed("deleteOne", string(controller.GetCollectionName()), configmanager.GetInstance().ServiceLBName)
 	}
 	logger.Log().Debug("MongoDB-DeleteOne-End", logger.StringField("collection", string(controller.GetCollectionName())), logger.StringField("db", string(controller.GetDBName())), logger.StringField("duration", time.Since(start).String()))
 	return err
@@ -215,10 +196,8 @@ func (u *MongoDBFunctions) FindOneAndDelete(ctx context.Context, controller base
 	start := time.Now()
 	conn := baseconnections.DBConnection().GetConnection(basetypes.MONGO).GetDB(basetypes.MONGO).(*mongo.Client)
 	err := conn.Database(string(controller.GetDBName())).Collection(string(controller.GetCollectionName())).FindOneAndDelete(ctx, query, &options.FindOneAndDeleteOptions{}).Decode(result)
-	metrics.GetInstance().RecordDBOperation(configmanager.GetInstance().ServiceLBName, string(controller.GetDBName()), string(controller.GetCollectionName()), "findOneAndDelete", time.Since(start))
 	if err != nil {
 		logger.Log().Debug("MongoDB-FindOneAndDelete-Error", logger.StringField("collection", string(controller.GetCollectionName())), logger.StringField("db", string(controller.GetDBName())), logger.ErrorField("error", err))
-		metrics.GetInstance().RecordDBOperationFailed("findOneAndDelete", string(controller.GetCollectionName()), configmanager.GetInstance().ServiceLBName)
 	}
 	logger.Log().Debug("MongoDB-FindOneAndDelete-End", logger.StringField("collection", string(controller.GetCollectionName())), logger.StringField("db", string(controller.GetDBName())), logger.StringField("duration", time.Since(start).String()))
 	return err
@@ -245,10 +224,8 @@ func (u *MongoDBFunctions) SoftDeleteOne(ctx context.Context, controller baseint
 		conn.Database(string(controller.GetDBName())).Collection(string(controller.GetCollectionName())).InsertOne(ctx, deletedData)
 	}
 
-	metrics.GetInstance().RecordDBOperation(configmanager.GetInstance().ServiceLBName, string(controller.GetDBName()), string(controller.GetCollectionName()), "softDeleteOne", time.Since(start))
 	if err != nil {
 		logger.Log().Debug("MongoDB-SoftDeleteOne-Error", logger.StringField("collection", string(controller.GetCollectionName())), logger.StringField("db", string(controller.GetDBName())), logger.ErrorField("error", err))
-		metrics.GetInstance().RecordDBOperationFailed("softDeleteOne", string(controller.GetCollectionName()), configmanager.GetInstance().ServiceLBName)
 	}
 	logger.Log().Debug("MongoDB-SoftDeleteOne-End", logger.StringField("collection", string(controller.GetCollectionName())), logger.StringField("db", string(controller.GetDBName())), logger.StringField("duration", time.Since(start).String()))
 	return err
@@ -265,10 +242,8 @@ func (u *MongoDBFunctions) DeleteMany(ctx context.Context, controller baseinterf
 	if deleteResult.DeletedCount == 0 {
 		return errors.New("no record deleted")
 	}
-	metrics.GetInstance().RecordDBOperation(configmanager.GetInstance().ServiceLBName, string(controller.GetDBName()), string(controller.GetCollectionName()), "deleteMany", time.Since(start))
 	if err != nil {
 		logger.Log().Debug("MongoDB-DeleteMany-Error", logger.StringField("collection", string(controller.GetCollectionName())), logger.StringField("db", string(controller.GetDBName())), logger.ErrorField("error", err))
-		metrics.GetInstance().RecordDBOperationFailed("deleteMany", string(controller.GetCollectionName()), configmanager.GetInstance().ServiceLBName)
 	}
 	logger.Log().Debug("MongoDB-DeleteMany-End", logger.StringField("collection", string(controller.GetCollectionName())), logger.StringField("db", string(controller.GetDBName())), logger.StringField("duration", time.Since(start).String()))
 	return err
@@ -305,10 +280,8 @@ func (u *MongoDBFunctions) SoftDeleteMany(ctx context.Context, controller basein
 		conn.Database(string(controller.GetDBName())).Collection(string(controller.GetCollectionName())).InsertMany(context.Background(), documentsToInsert)
 		return err
 	}
-	metrics.GetInstance().RecordDBOperation(configmanager.GetInstance().ServiceLBName, string(controller.GetDBName()), string(controller.GetCollectionName()), "softDeleteMany", time.Since(start))
 	if err != nil {
 		logger.Log().Debug("MongoDB-SoftDeleteMany-Error", logger.StringField("collection", string(controller.GetCollectionName())), logger.StringField("db", string(controller.GetDBName())), logger.ErrorField("error", err))
-		metrics.GetInstance().RecordDBOperationFailed("softDeleteMany", string(controller.GetCollectionName()), configmanager.GetInstance().ServiceLBName)
 	}
 	logger.Log().Debug("MongoDB-BulkWrite-End", logger.StringField("collection", string(controller.GetCollectionName())), logger.StringField("db", string(controller.GetDBName())), logger.StringField("duration", time.Since(start).String()))
 	return err
@@ -319,10 +292,8 @@ func (u *MongoDBFunctions) BulkWrite(ctx context.Context, controller baseinterfa
 	start := time.Now()
 	conn := baseconnections.DBConnection().GetConnection(basetypes.MONGO).GetDB(basetypes.MONGO).(*mongo.Client)
 	_, err := conn.Database(string(controller.GetDBName())).Collection(string(controller.GetCollectionName())).BulkWrite(ctx, writers, &options.BulkWriteOptions{})
-	metrics.GetInstance().RecordDBOperation(configmanager.GetInstance().ServiceLBName, string(controller.GetDBName()), string(controller.GetCollectionName()), "bulkWrite", time.Since(start))
 	if err != nil {
 		logger.Log().Debug("MongoDB-BulkWrite-Error", logger.StringField("collection", string(controller.GetCollectionName())), logger.StringField("db", string(controller.GetDBName())), logger.ErrorField("error", err))
-		metrics.GetInstance().RecordDBOperationFailed("bulkWrite", string(controller.GetCollectionName()), configmanager.GetInstance().ServiceLBName)
 	}
 	logger.Log().Debug("MongoDB-BulkWrite-End", logger.StringField("collection", string(controller.GetCollectionName())), logger.StringField("db", string(controller.GetDBName())), logger.StringField("duration", time.Since(start).String()))
 	return err
@@ -352,13 +323,10 @@ func (u *MongoDBFunctions) Find(ctx context.Context, controller baseinterfaces.C
 		return err
 	}
 	if err = cursor.All(ctx, results); err == nil {
-		metrics.GetInstance().RecordDBOperation(configmanager.GetInstance().ServiceLBName, string(controller.GetDBName()), string(controller.GetCollectionName()), "find", time.Since(start))
 		return nil
 	}
-	metrics.GetInstance().RecordDBOperation(configmanager.GetInstance().ServiceLBName, string(controller.GetDBName()), string(controller.GetCollectionName()), "find", time.Since(start))
 	logger.Log().Debug("MongoDB-Find-End", logger.StringField("collection", string(controller.GetCollectionName())), logger.StringField("db", string(controller.GetDBName())), logger.StringField("duration", time.Since(start).String()))
 	logger.Log().Debug("MongoDB-Find-Error", logger.StringField("collection", string(controller.GetCollectionName())), logger.StringField("db", string(controller.GetDBName())), logger.ErrorField("error", err))
-	metrics.GetInstance().RecordDBOperationFailed("find", string(controller.GetCollectionName()), configmanager.GetInstance().ServiceLBName)
 	return err
 }
 
@@ -406,10 +374,8 @@ func (u *MongoDBFunctions) Distinct(ctx context.Context, controller baseinterfac
 	opts := options.DistinctOptions{}
 	conn := baseconnections.DBConnection().GetConnection(basetypes.MONGO).GetDB(basetypes.MONGO).(*mongo.Client)
 	objectArray, err := conn.Database(string(controller.GetDBName())).Collection(string(controller.GetCollectionName())).Distinct(ctx, key, filter, &opts)
-	metrics.GetInstance().RecordDBOperation(configmanager.GetInstance().ServiceLBName, string(controller.GetDBName()), string(controller.GetCollectionName()), "distinct", time.Since(start))
 	if err != nil {
 		logger.Log().Debug("MongoDB-Distinct-Error", logger.StringField("collection", string(controller.GetCollectionName())), logger.StringField("db", string(controller.GetDBName())), logger.ErrorField("error", err))
-		metrics.GetInstance().RecordDBOperationFailed("distinct", string(controller.GetCollectionName()), configmanager.GetInstance().ServiceLBName)
 	}
 	logger.Log().Debug("MongoDB-Distinct-End", logger.StringField("collection", string(controller.GetCollectionName())), logger.StringField("db", string(controller.GetDBName())), logger.StringField("duration", time.Since(start).String()))
 	return objectArray, err
@@ -440,16 +406,12 @@ func (u *MongoDBFunctions) Paginate(ctx context.Context, controller baseinterfac
 	conn := baseconnections.DBConnection().GetConnection(basetypes.MONGO).GetDB(basetypes.MONGO).(*mongo.Client)
 	totalDocuments, err := conn.Database(string(controller.GetDBName())).Collection(string(controller.GetCollectionName())).CountDocuments(ctx, query)
 	if err != nil {
-		metrics.GetInstance().RecordDBOperation(configmanager.GetInstance().ServiceLBName, string(controller.GetDBName()), string(controller.GetCollectionName()), "countDocuments", time.Since(start))
 		logger.Log().Debug("MongoDB-CountDocuments-Error", logger.StringField("collection", string(controller.GetCollectionName())), logger.StringField("db", string(controller.GetDBName())), logger.ErrorField("error", err))
-		metrics.GetInstance().RecordDBOperationFailed("countDocuments", string(controller.GetCollectionName()), configmanager.GetInstance().ServiceLBName)
 		return genericmodels.PaginationResults{}, err
 	}
 	cursor, err := conn.Database(string(controller.GetDBName())).Collection(string(controller.GetCollectionName())).Find(ctx, query, opts)
 	if err != nil {
-		metrics.GetInstance().RecordDBOperation(configmanager.GetInstance().ServiceLBName, string(controller.GetDBName()), string(controller.GetCollectionName()), "find", time.Since(start))
 		logger.Log().Debug("MongoDB-Find-Error", logger.StringField("collection", string(controller.GetCollectionName())), logger.StringField("db", string(controller.GetDBName())), logger.ErrorField("error", err))
-		metrics.GetInstance().RecordDBOperationFailed("find", string(controller.GetCollectionName()), configmanager.GetInstance().ServiceLBName)
 		return genericmodels.PaginationResults{}, err
 	}
 	if err = cursor.All(ctx, results); err == nil {
@@ -462,12 +424,9 @@ func (u *MongoDBFunctions) Paginate(ctx context.Context, controller baseinterfac
 			},
 			Data: results,
 		}
-		metrics.GetInstance().RecordDBOperation(configmanager.GetInstance().ServiceLBName, string(controller.GetDBName()), string(controller.GetCollectionName()), "paginate", time.Since(start))
 		return paginationResults, nil
 	}
-	metrics.GetInstance().RecordDBOperation(configmanager.GetInstance().ServiceLBName, string(controller.GetDBName()), string(controller.GetCollectionName()), "paginate", time.Since(start))
 	logger.Log().Debug("MongoDB-Paginate-Error", logger.StringField("collection", string(controller.GetCollectionName())), logger.StringField("db", string(controller.GetDBName())), logger.ErrorField("error", err))
-	metrics.GetInstance().RecordDBOperationFailed("paginate", string(controller.GetCollectionName()), configmanager.GetInstance().ServiceLBName)
 	logger.Log().Debug("MongoDB-Paginate-End", logger.StringField("collection", string(controller.GetCollectionName())), logger.StringField("db", string(controller.GetDBName())), logger.StringField("duration", time.Since(start).String()))
 	return genericmodels.PaginationResults{Pagination: genericmodels.Pagination{
 		Limit: int64(option.GetLimit()),
@@ -499,20 +458,15 @@ func (u *MongoDBFunctions) Aggregate(ctx context.Context, controller baseinterfa
 	cursor, err := conn.Database(string(controller.GetDBName())).Collection(string(controller.GetCollectionName())).Aggregate(ctx, pipeline)
 
 	if err != nil {
-		metrics.GetInstance().RecordDBOperation(configmanager.GetInstance().ServiceLBName, string(controller.GetDBName()), string(controller.GetCollectionName()), "aggregate", time.Since(start))
 		logger.Log().Debug("MongoDB-Aggregate-Error", logger.StringField("collection", string(controller.GetCollectionName())), logger.StringField("db", string(controller.GetDBName())), logger.ErrorField("error", err))
-		metrics.GetInstance().RecordDBOperationFailed("aggregate", string(controller.GetCollectionName()), configmanager.GetInstance().ServiceLBName)
 		return err
 	}
 
 	if err = cursor.All(ctx, results); err == nil {
-		metrics.GetInstance().RecordDBOperation(configmanager.GetInstance().ServiceLBName, string(controller.GetDBName()), string(controller.GetCollectionName()), "aggregate", time.Since(start))
 		logger.Log().Debug("MongoDB-Aggregate-End", logger.StringField("collection", string(controller.GetCollectionName())), logger.StringField("db", string(controller.GetDBName())), logger.StringField("duration", time.Since(start).String()))
 		return nil
 	}
-	metrics.GetInstance().RecordDBOperation(configmanager.GetInstance().ServiceLBName, string(controller.GetDBName()), string(controller.GetCollectionName()), "aggregate", time.Since(start))
 	logger.Log().Debug("MongoDB-Aggregate-Error", logger.StringField("collection", string(controller.GetCollectionName())), logger.StringField("db", string(controller.GetDBName())), logger.ErrorField("error", err))
-	metrics.GetInstance().RecordDBOperationFailed("aggregate", string(controller.GetCollectionName()), configmanager.GetInstance().ServiceLBName)
 	return err
 }
 
@@ -536,9 +490,7 @@ func (u *MongoDBFunctions) AggregatePaginate(ctx context.Context, controller bas
 	// Execute the first aggregation for count
 	cursor, err := conn.Database(string(controller.GetDBName())).Collection(string(controller.GetCollectionName())).Aggregate(ctx, pipeline)
 	if err != nil {
-		metrics.GetInstance().RecordDBOperation(configmanager.GetInstance().ServiceLBName, string(controller.GetDBName()), string(controller.GetCollectionName()), "aggregate", time.Since(start))
 		logger.Log().Debug("MongoDB-Aggregate-Error", logger.StringField("collection", string(controller.GetCollectionName())), logger.StringField("db", string(controller.GetDBName())), logger.ErrorField("error", err))
-		metrics.GetInstance().RecordDBOperationFailed("aggregate", string(controller.GetCollectionName()), configmanager.GetInstance().ServiceLBName)
 		return genericmodels.PaginationResults{}, err
 	}
 
@@ -587,7 +539,6 @@ func (u *MongoDBFunctions) AggregatePaginate(ctx context.Context, controller bas
 				},
 				Data: results,
 			}
-			metrics.GetInstance().RecordDBOperation(configmanager.GetInstance().ServiceLBName, string(controller.GetDBName()), string(controller.GetCollectionName()), "aggregate", time.Since(start))
 			logger.Log().Debug("MongoDB-AggregatePaginate-End", logger.StringField("collection", string(controller.GetCollectionName())), logger.StringField("db", string(controller.GetDBName())), logger.StringField("duration", time.Since(start).String()))
 			return paginationResults, nil
 		}
@@ -602,7 +553,6 @@ func (u *MongoDBFunctions) AggregatePaginate(ctx context.Context, controller bas
 			},
 			Data: []customtypes.M{},
 		}
-		metrics.GetInstance().RecordDBOperation(configmanager.GetInstance().ServiceLBName, string(controller.GetDBName()), string(controller.GetCollectionName()), "aggregate", time.Since(start))
 		logger.Log().Debug("MongoDB-AggregatePaginate-End", logger.StringField("collection", string(controller.GetCollectionName())), logger.StringField("db", string(controller.GetDBName())), logger.StringField("duration", time.Since(start).String()))
 		return paginationResults, nil
 	}
