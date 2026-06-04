@@ -8,7 +8,6 @@ import (
 
 	"github.com/glodb/keel/settings/configmanager"
 
-	gcpexporter "github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/trace"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
@@ -68,11 +67,7 @@ func (t *Tracing) initializeTracing() {
 		err      error
 	)
 
-	if configmanager.GetInstance().UseGcpTracing {
-		exporter, err = gcpexporter.New(gcpexporter.WithProjectID(configmanager.GetInstance().GcpProjectId))
-	} else {
-		exporter, err = jaeger.New(jaeger.WithCollectorEndpoint(jaeger.WithEndpoint(jaegerEndpoint)))
-	}
+	exporter, err = jaeger.New(jaeger.WithCollectorEndpoint(jaeger.WithEndpoint(jaegerEndpoint)))
 
 	if err != nil {
 		t.logger.Error("Failed to create exporter", zap.Error(err))
@@ -119,8 +114,6 @@ func (t *Tracing) initializeTracing() {
 		zap.String("service_name", serviceName),
 		zap.String("service_version", serviceVersion.String()),
 		zap.String("jaeger_endpoint", jaegerEndpoint),
-		zap.Bool("use_gcp_tracing", configmanager.GetInstance().UseGcpTracing),
-		zap.String("gcp_project_id", configmanager.GetInstance().GcpProjectId),
 	)
 }
 
