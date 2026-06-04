@@ -241,8 +241,6 @@ func (t *Tracing) IsSampled(ctx context.Context) bool {
 // InjectTraceContext injects trace context into HTTP headers
 func (t *Tracing) InjectTraceContext(ctx context.Context, headers map[string]string) {
 	span := trace.SpanFromContext(ctx)
-	span.SpanContext().TraceID().String()
-	span.SpanContext().SpanID().String()
 
 	// Inject trace context into headers
 	headers["X-Trace-ID"] = span.SpanContext().TraceID().String()

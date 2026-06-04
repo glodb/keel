@@ -379,7 +379,7 @@ func (u *PSqlFunctions) RawQuery(ctx context.Context, controller baseinterfaces.
 
 func (u *PSqlFunctions) Delete(ctx context.Context, controller baseinterfaces.Controller, condition map[string]interface{}, useOr bool, addParenthesis bool) error {
 	if len(condition) == 0 {
-		errors.New("delete can't run with out conditions")
+		return errors.New("delete can't run with out conditions")
 	}
 
 	conn := baseconnections.DBConnection().GetConnection(basetypes.PSQL).GetDB(basetypes.MYSQL).(*sql.DB)
