@@ -29,6 +29,26 @@ type ConnectionInterface interface {
 	IsHealthy(ctx context.Context) (bool, error)
 }
 
+// ConnectionParams holds the credentials and dial options for a single database connection.
+// Pass to GetConnectionPool().RegisterConnection() to supply parameters programmatically
+// from outside the library, instead of (or overriding) the JSON config / env vars.
+// Fields that are left at their zero value are ignored and the configmanager value is
+// used instead, so you can override only the fields you care about.
+type ConnectionParams struct {
+	Host     string
+	Port     string
+	Username string
+	Password string
+	DBName   string
+
+	// MongoDB-specific options
+	Atlas               bool
+	SecureMongo         bool
+	CertFile            string
+	MongoMaxConnections int
+	AppName             string
+}
+
 // ConnectionInfo provides metadata about database connections for observability
 type ConnectionInfo struct {
 	DatabaseType     basetypes.DbType `json:"database_type"`

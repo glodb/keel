@@ -1,0 +1,114 @@
+{
+  "_comment_required": "Fields marked REQUIRED must be set; all others are optional and safe to omit.",
+
+  "address": ":8080",
+  "deploymentEnv": "DEV",
+
+  "isProduction": false,
+  "printInfo": true,
+  "printWarning": true,
+  "microServiceName": "my-service",
+
+  "serviceLBName": "/api/v1",
+  "apiPrefix": "/users",
+  "pageSize": 20,
+  "maxPageSize": 200,
+  "sortKey": "sort",
+  "timeRangeKey": "timeRange",
+
+  "mongo": {
+    "host": "localhost",
+    "port": "27017",
+    "username": "admin",
+    "password": "secret",
+    "dbName": "mydb",
+    "mongoMaxConnections": 100,
+    "atlas": false,
+    "secureMongo": false,
+    "certFile": "",
+    "appName": "my-service"
+  },
+
+  "psql": {
+    "host": "localhost",
+    "port": "5432",
+    "username": "postgres",
+    "password": "secret",
+    "dbName": "mydb",
+    "sslMode": "disable"
+  },
+
+  "mysql": {
+    "host": "localhost",
+    "port": "3306",
+    "username": "root",
+    "password": "secret",
+    "dbName": "mydb"
+  },
+
+  "natsServer": "nats://localhost:4222",
+  "registeredTopics": ["user.created", "order.placed"],
+  "publishingTopics": ["notification.send"],
+  "rpcRequestTopics": ["auth.validate"],
+  "subscribedTopics": {
+    "user.created": { "queue": "user-service" }
+  },
+  "nonQueueSubscribedTopics": {},
+  "rpcSubscribedTopics": {
+    "auth.validate": { "handler": "AuthValidateHandler" }
+  },
+  "publisherBatchSize": 100,
+
+  "cacheType": "redis",
+  "redis": {
+    "redisCon": "tcp",
+    "redisAddress": "localhost:6379",
+    "redisMaxConnections": 50,
+    "redisMaxIdleConnections": 10
+  },
+  "redisRetries": 3,
+  "redisRetryInterval": 100,
+  "cacheContextTimeout": 5,
+
+  "rpcRequestExpirySeconds": 30,
+
+  "secureCookieHash": "32-byte-hmac-key-goes-here------",
+  "secureCookieBlock": "16-or-32-byte-aes-key-goes-here-",
+
+  "softDeleteCollectionPrefix": "deleted_",
+  "softDeletionKey": "deletedAt",
+  "deletedByKey": "deletedBy",
+
+  "migrationsPath": "./migrations",
+
+  "email": {
+    "host": "smtp.example.com",
+    "port": "587",
+    "username": "no-reply@example.com",
+    "password": "smtp-password",
+    "from": "no-reply@example.com"
+  },
+  "messageSendingMilliSeconds": 500,
+
+  "firebaseCredentialsFileName": "./firebase-service-account.json",
+  "firebaseMessageUrl": "https://fcm.googleapis.com/v1/projects/MY_PROJECT/messages:send",
+  "firebaseProjectId": "my-gcp-project",
+
+  "meilisearch": {
+    "host": "http://localhost:7700",
+    "apiKey": "masterKey"
+  },
+
+  "metricsPort": ":9090",
+  "jaegerEndpoint": "http://localhost:14268/api/traces",
+  "usePprof": false,
+  "pprofAddress": ":6060",
+
+  "socketAddress": ":9000",
+
+  "serviceVersion": {
+    "major": 1,
+    "minor": 0,
+    "patch": 0
+  }
+}

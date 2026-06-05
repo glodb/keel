@@ -7,7 +7,6 @@ import (
 	"crypto/cipher"
 	"crypto/rand"
 	"encoding/base64"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -47,7 +46,7 @@ type Utils struct {
 	rng    *mrand.Rand
 }
 
-// Singleton. Returns a single object of Utils
+// GetInstance returns the singleton Utils instance.
 func GetInstance() *Utils {
 	return getInstance()
 }
@@ -109,13 +108,6 @@ func (u *Utils) GenerateRandomNumber(digits int) (string, error) {
 	}
 
 	return randomNumber, nil
-}
-
-// generateRequestID creates a fast random request ID
-func (u *Utils) GenerateRequestID() string {
-	bytes := make([]byte, 8) // 16 hex characters
-	rand.Read(bytes)
-	return hex.EncodeToString(bytes)
 }
 
 // GenerateXID generates a unique XID (Extended ID) based on the current timestamp and a random number.
@@ -198,4 +190,3 @@ func (u *Utils) ReadKeyFile(filePath string) []byte {
 	}
 	return data
 }
-

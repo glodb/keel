@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/glodb/keel/settings/configmanager"
-	"github.com/glodb/keel/settings/openapi"
+	"github.com/glodb/keel/internal/openapi"
 
 	"github.com/gin-gonic/gin"
 )

@@ -15,13 +15,40 @@ import (
 )
 
 type RedisCache struct {
-	pool      *redis.Pool
-	semaphore *semaphore.Weighted
+	pool               *redis.Pool
+	semaphore          *semaphore.Weighted
+	maxConnections     int
+	maxIdleConnections int
+	redisCon           string
+	redisAddress       string
+}
+
+func NewRedisCache(maxConnections int, maxIdleConnections int, redisCon string, redisAddress string) *RedisCache {
+
+	instance := &RedisCache{
+		maxConnections:     maxConnections,
+		maxIdleConnections: maxIdleConnections,
+		redisCon:           redisCon,
+		redisAddress:       redisAddress,
+	}
+	pool, err := instance.newPool(maxConnections, maxIdleConnections, redisCon, redisAddress)
+	if err != nil {
+		logger.Log().Error("Failed to create Redis pool", logger.ErrorField("error", err))
+		return nil
+	}
+	instance.pool = pool
+	instance.semaphore = semaphore.NewWeighted(int64(maxConnections))
+	return instance
 }
 
 var getInstance = sync.OnceValue(func() *RedisCache {
-	instance := &RedisCache{}
-	pool, err := instance.newPool()
+	instance := &RedisCache{
+		maxConnections:     configmanager.GetInstance().Redis.RedisMaxConnections,
+		maxIdleConnections: configmanager.GetInstance().Redis.RedisMaxIdleConnections,
+		redisCon:           configmanager.GetInstance().Redis.RedisCon,
+		redisAddress:       configmanager.GetInstance().Redis.RedisAddress,
+	}
+	pool, err := instance.newPool(configmanager.GetInstance().Redis.RedisMaxConnections, configmanager.GetInstance().Redis.RedisMaxIdleConnections, configmanager.GetInstance().Redis.RedisCon, configmanager.GetInstance().Redis.RedisAddress)
 	if err != nil {
 		logger.Log().Error("Failed to create Redis pool", logger.ErrorField("error", err))
 		return nil
@@ -39,7 +66,7 @@ func GetInstance() *RedisCache {
 // refresh Pool is used to refresh the redis pool if the pool is not working
 func (cache *RedisCache) refreshPool() error {
 	var err error
-	cache.pool, err = cache.newPool()
+	cache.pool, err = cache.newPool(cache.maxConnections, cache.maxIdleConnections, cache.redisCon, cache.redisAddress)
 	return err
 }
 
@@ -54,15 +81,15 @@ func (cache *RedisCache) ReleaseConnection(conn redis.Conn) {
 	cache.semaphore.Release(1)
 }
 
-func (cache *RedisCache) newPool() (*redis.Pool, error) {
+func (cache *RedisCache) newPool(maxConnections int, maxIdleConnections int, redisCon string, redisAddress string) (*redis.Pool, error) {
 	var redErr error
 	pool := redis.Pool{
-		MaxIdle:     configmanager.GetInstance().Redis.RedisMaxIdleConnections,
-		MaxActive:   configmanager.GetInstance().Redis.RedisMaxConnections, // max number of connections
+		MaxIdle:     maxIdleConnections,
+		MaxActive:   maxConnections, // max number of connections
 		IdleTimeout: 240 * time.Second,
 		Wait:        true, // Wait for connection to be available
 		Dial: func() (redis.Conn, error) {
-			c, err := redis.Dial(configmanager.GetInstance().Redis.RedisCon, configmanager.GetInstance().Redis.RedisAddress)
+			c, err := redis.Dial(redisCon, redisAddress)
 			if err != nil {
 				redErr = err
 				logger.Log().Error("Error dialing Redis", logger.ErrorField("error", err))
@@ -109,19 +136,24 @@ func (cache *RedisCache) AcquireCacheLock(ctx context.Context, lockKey string, e
 	defer cache.semaphore.Release(1)
 	c := cache.pool.Get()
 	defer c.Close()
-	for i := 0; i < configmanager.GetInstance().RedisRetries; i++ {
-		// Try to set the lock key with expiration
+	retries := configmanager.GetInstance().RedisRetries
+	for i := 0; i <= retries; i++ {
 		result, err := redis.String(c.Do("SET", configmanager.GetInstance().DeploymentEnv+lockKey, "1", "NX", "PX", int(expirationMilli)))
+		if err == redis.ErrNil {
+			// NX condition not met — lock is already held; not a connection error
+			return false, nil
+		}
 		if err != nil {
 			return false, err
 		}
 		if result == "OK" {
 			return true, nil
 		}
-		// Sleep before retrying
-		time.Sleep(time.Duration(configmanager.GetInstance().RedisRetryInterval))
+		if i < retries {
+			time.Sleep(time.Duration(configmanager.GetInstance().RedisRetryInterval))
+		}
 	}
-	return false, fmt.Errorf("failed to acquire lock after %d retries", configmanager.GetInstance().RedisRetries)
+	return false, fmt.Errorf("failed to acquire lock after %d retries", retries)
 }
 
 func (cache *RedisCache) AcquireCacheLock2(lockKey string, expirationMilli int64) (bool, error) {

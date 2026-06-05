@@ -58,6 +58,14 @@ func (c *config) validateConfig() error {
 	return nil
 }
 
+// validDeploymentEnvs is the set of recognised deployment environment names.
+var validDeploymentEnvs = map[string]bool{
+	"DEV": true, "DEVELOPMENT": true,
+	"TEST": true, "TESTING": true,
+	"STAGING": true,
+	"PROD": true, "PRODUCTION": true,
+}
+
 // validateBasicFields validates basic required fields
 func (c *config) validateBasicFields() ConfigValidationErrors {
 	var errs ConfigValidationErrors
@@ -74,6 +82,16 @@ func (c *config) validateBasicFields() ConfigValidationErrors {
 				Field:   "Address",
 				Value:   c.Address,
 				Message: err.Error(),
+			})
+		}
+	}
+
+	if env := strings.TrimSpace(strings.ToUpper(c.DeploymentEnv)); env != "" {
+		if !validDeploymentEnvs[env] {
+			errs = append(errs, ConfigValidationError{
+				Field:   "DeploymentEnv",
+				Value:   c.DeploymentEnv,
+				Message: "must be one of: DEV, DEVELOPMENT, TEST, TESTING, STAGING, PROD, PRODUCTION",
 			})
 		}
 	}

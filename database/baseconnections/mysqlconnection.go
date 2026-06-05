@@ -13,13 +13,29 @@ import (
 
 // Keeping it open for multiple db or own db connections in microservices
 type MysqlConnection struct {
-	db *sql.DB
+	db     *sql.DB
+	params *ConnectionParams
 }
 
 func (u *MysqlConnection) CreateConnection() (ConnectionInterface, error) {
-	dsn := configmanager.GetInstance().MySql.Username + ":" + configmanager.GetInstance().MySql.Password + "@tcp(" + configmanager.GetInstance().MySql.Host + ":" + configmanager.GetInstance().MySql.Port + ")/" + configmanager.GetInstance().MySql.DBName
-	db, err := sql.Open("mysql", dsn)
+	var host, port, username, password, dbname string
+	if u.params != nil {
+		host = u.params.Host
+		port = u.params.Port
+		username = u.params.Username
+		password = u.params.Password
+		dbname = u.params.DBName
+	} else {
+		cfg := configmanager.GetInstance().MySql
+		host = cfg.Host
+		port = cfg.Port
+		username = cfg.Username
+		password = cfg.Password
+		dbname = cfg.DBName
+	}
 
+	dsn := username + ":" + password + "@tcp(" + host + ":" + port + ")/" + dbname
+	db, err := sql.Open("mysql", dsn)
 	if err != nil {
 		return nil, err
 	}
@@ -47,12 +63,22 @@ func (u *MysqlConnection) Ping(ctx context.Context) error {
 }
 
 func (u *MysqlConnection) GetConnectionInfo() ConnectionInfo {
-	config := configmanager.GetInstance().MySql
+	var host, port, dbname string
+	if u.params != nil {
+		host = u.params.Host
+		port = u.params.Port
+		dbname = u.params.DBName
+	} else {
+		cfg := configmanager.GetInstance().MySql
+		host = cfg.Host
+		port = cfg.Port
+		dbname = cfg.DBName
+	}
 	return ConnectionInfo{
 		DatabaseType: basetypes.MYSQL,
-		Host:         config.Host,
-		Port:         config.Port,
-		DatabaseName: config.DBName,
+		Host:         host,
+		Port:         port,
+		DatabaseName: dbname,
 		ConnectionState: func() string {
 			if u.db != nil {
 				return "connected"

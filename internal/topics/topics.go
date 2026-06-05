@@ -12,6 +12,10 @@ type Topics struct {
 	publishableTopics map[string]bool
 	rpcRequestTopics  map[string]bool
 	listeningTopics   map[string]interface{}
+
+	// programmatic registrations (merged with config-based ones at lookup time)
+	programmaticSubscribedTopics    map[string]interface{}
+	programmaticRpcSubscribedTopics map[string]interface{}
 }
 
 var getInstance = sync.OnceValue(func() *Topics {
@@ -20,12 +24,13 @@ var getInstance = sync.OnceValue(func() *Topics {
 	instance.publishableTopics = make(map[string]bool)
 	instance.listeningTopics = make(map[string]interface{})
 	instance.rpcRequestTopics = make(map[string]bool)
+	instance.programmaticSubscribedTopics = make(map[string]interface{})
+	instance.programmaticRpcSubscribedTopics = make(map[string]interface{})
 	return instance
 })
 
-// Singleton. Returns a single object of Topic
+// GetInstance returns the singleton Topics instance.
 func GetInstance() *Topics {
-
 	return getInstance()
 }
 
@@ -38,6 +43,38 @@ func (t *Topics) Register() {
 func (t *Topics) RegisterManagerTopics(topicName string) {
 	t.registeredTopics[configmanager.GetInstance().DeploymentEnv+topicName] = true
 	t.publishableTopics[configmanager.GetInstance().DeploymentEnv+topicName] = true
+}
+
+// AddRegisteredTopic registers a topic programmatically so it is treated as valid.
+// The deployment-env prefix is applied automatically.
+func (t *Topics) AddRegisteredTopic(name string) {
+	t.registeredTopics[configmanager.GetInstance().DeploymentEnv+name] = true
+}
+
+// AddPublishableTopic registers a topic programmatically as both valid and publishable.
+func (t *Topics) AddPublishableTopic(name string) {
+	t.registeredTopics[configmanager.GetInstance().DeploymentEnv+name] = true
+	t.publishableTopics[configmanager.GetInstance().DeploymentEnv+name] = true
+}
+
+// AddSubscribedTopic registers a topic programmatically for queue subscription.
+// handlerMethod is the method name on the SubscriptionInterface that handles messages.
+func (t *Topics) AddSubscribedTopic(name, handlerMethod string) {
+	t.registeredTopics[configmanager.GetInstance().DeploymentEnv+name] = true
+	t.programmaticSubscribedTopics[configmanager.GetInstance().DeploymentEnv+name] = handlerMethod
+}
+
+// AddRpcRequestTopic registers a topic programmatically as an RPC request topic.
+func (t *Topics) AddRpcRequestTopic(name string) {
+	t.registeredTopics[configmanager.GetInstance().DeploymentEnv+name] = true
+	t.rpcRequestTopics[configmanager.GetInstance().DeploymentEnv+name] = true
+}
+
+// AddRpcSubscribedTopic registers a topic programmatically for RPC queue subscription.
+// handlerMethod is the method name on the SubscriptionInterface that handles messages.
+func (t *Topics) AddRpcSubscribedTopic(name, handlerMethod string) {
+	t.registeredTopics[configmanager.GetInstance().DeploymentEnv+name] = true
+	t.programmaticRpcSubscribedTopics[configmanager.GetInstance().DeploymentEnv+name] = handlerMethod
 }
 
 func (t *Topics) registerTopics() {
@@ -57,30 +94,36 @@ func (t *Topics) registerTopics() {
 }
 
 func (t *Topics) GetSubscribedTopics() map[string]interface{} {
-	subscribedTopics := configmanager.GetInstance().SubscribedTopics
-	newSub := make(map[string]interface{})
+	merged := make(map[string]interface{})
 
-	if subscribedTopics == nil {
-		return newSub
+	// config-based subscriptions
+	for key, element := range configmanager.GetInstance().SubscribedTopics {
+		merged[configmanager.GetInstance().DeploymentEnv+key] = element
 	}
 
-	for key, element := range subscribedTopics {
-		newSub[configmanager.GetInstance().DeploymentEnv+key] = element
+	// programmatic subscriptions (override config if same key)
+	for key, element := range t.programmaticSubscribedTopics {
+		merged[key] = element
 	}
-	if subscribedTopics != nil {
-		t.listeningTopics = newSub
-	} else {
-		return nil
-	}
+
+	t.listeningTopics = merged
 	return t.listeningTopics
 }
 
 func (t *Topics) GetRPCSubcribedTopics() map[string]interface{} {
-	rpcListeningTopics := make(map[string]interface{})
+	merged := make(map[string]interface{})
+
+	// config-based RPC subscriptions
 	for key, element := range configmanager.GetInstance().RpcSubscribedTopics {
-		rpcListeningTopics[configmanager.GetInstance().DeploymentEnv+key] = element
+		merged[configmanager.GetInstance().DeploymentEnv+key] = element
 	}
-	return rpcListeningTopics
+
+	// programmatic RPC subscriptions (override config if same key)
+	for key, element := range t.programmaticRpcSubscribedTopics {
+		merged[key] = element
+	}
+
+	return merged
 }
 
 func (t *Topics) GetNonQueueTopics() map[string]interface{} {

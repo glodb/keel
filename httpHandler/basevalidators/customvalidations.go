@@ -33,6 +33,17 @@ func GetInstance() *CustomValidator {
 	return getInstance()
 }
 
+func NewCustomValidator() *CustomValidator {
+	instance := &CustomValidator{}
+	instance.specialChars = map[rune]bool{'!': true, '@': true, '#': true, '$': true, '%': true, '^': true, '&': true, '*': true, '(': true, ')': true, '-': true, '_': true, '+': true, '=': true, '<': true, '>': true, '?': true, '/': true, '{': true, '}': true, '[': true, ']': true, '|': true}
+	en := en.New()
+	uni := ut.New(en, en)
+	instance.trans, _ = uni.GetTranslator("en")
+	instance.v = validator.New(validator.WithRequiredStructEnabled())
+	instance.RegisterCustomValidators()
+	return instance
+}
+
 func (cv *CustomValidator) GetTrans() ut.Translator {
 	return cv.trans
 }

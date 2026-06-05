@@ -5,7 +5,7 @@ import (
 
 	"github.com/glodb/keel/settings/configmanager"
 	"github.com/glodb/keel/settings/logger"
-	"github.com/glodb/keel/settings/topics"
+	"github.com/glodb/keel/internal/topics"
 
 	"github.com/bytedance/sonic"
 	"github.com/nats-io/nats.go"

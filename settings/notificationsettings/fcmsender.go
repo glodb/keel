@@ -11,7 +11,7 @@ import (
 	"github.com/glodb/keel/models/notificationmodels"
 	"github.com/glodb/keel/settings/configmanager"
 	"github.com/glodb/keel/settings/logger"
-	"github.com/glodb/keel/settings/utils"
+	"github.com/glodb/keel/internal/utils"
 
 	"github.com/bytedance/sonic"
 

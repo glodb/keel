@@ -13,7 +13,7 @@ import (
 	"github.com/glodb/keel/settings/searchsettings/meilisearch"
 	"github.com/glodb/keel/settings/searchsettings/search"
 	"github.com/glodb/keel/settings/servicehandler"
-	"github.com/glodb/keel/settings/topics"
+	"github.com/glodb/keel/internal/topics"
 	"github.com/glodb/keel/settings/tracing"
 )
 

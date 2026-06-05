@@ -29,8 +29,17 @@ type SocketIO struct {
 	onMessage   func(c *SocketSession, message socketmodels.Message)
 	socketUsers map[string]*utilsdatatypes.Set[*SocketSession] //To send a message to specific user based on user id
 	mutex       sync.RWMutex
+
+	// events holds consumer-registered inbound event handlers, keyed by event
+	// name. They are bound onto the underlying socket.io server in build().
+	events map[string]interface{}
+
+	// checkOrigin decides whether a cross-origin request is accepted. Defaults
+	// to allow-all for backward compatibility; override with SetCheckOrigin.
+	checkOrigin func(r *http.Request) bool
 }
 
+// allowOriginFunc is the default permissive CORS check (allow all origins).
 var allowOriginFunc = func(r *http.Request) bool {
 	return true
 }
@@ -40,23 +49,55 @@ type RequestHandler struct {
 	servedRequests   int
 }
 
-// Listen starts the socket.io server on the configured address and blocks until
-// the underlying HTTP server exits. It uses its own http.ServeMux so it does
-// not pollute http.DefaultServeMux or conflict with the Gin HTTP server.
-func (s *SocketIO) Listen() {
+// build constructs the underlying socket.io server, applies the configured
+// CORS check, binds the lifecycle/message topics, and binds every consumer-
+// registered custom event. It is shared by Handler() (Gin-mounted mode) and
+// Listen() (standalone-port mode). It does NOT start serving.
+func (s *SocketIO) build() *socketio.Server {
+	origin := s.checkOrigin
+	if origin == nil {
+		origin = allowOriginFunc
+	}
+
 	server := socketio.NewServer(&engineio.Options{
 		Transports: []transport.Transport{
 			&polling.Transport{
-				CheckOrigin: allowOriginFunc,
+				CheckOrigin: origin,
 			},
 			&websocket.Transport{
-				CheckOrigin: allowOriginFunc,
+				CheckOrigin: origin,
 			},
 		},
 	})
 
 	s.server = server
 	s.registerTopics(s.server)
+	s.registerEvents(s.server)
+	return server
+}
+
+// Handler builds the socket.io server (if not already built), starts its
+// background event loop, and returns it as an http.Handler so it can be mounted
+// onto an existing router (e.g. Gin via gin.WrapH). Use this for the shared-port
+// deployment where sockets live on the main HTTP server.
+//
+// Register events and callbacks (RegisterEvent, OnMessage, etc.) BEFORE calling
+// Handler(); bindings are applied during the build and are not picked up after.
+func (s *SocketIO) Handler() http.Handler {
+	if s.server == nil {
+		s.build()
+	}
+	go s.server.Serve()
+	return s.server
+}
+
+// Listen starts the socket.io server on the configured address and blocks until
+// the underlying HTTP server exits. It uses its own http.ServeMux so it does
+// not pollute http.DefaultServeMux or conflict with the Gin HTTP server. Use
+// this only for the standalone (HTTP-less) socket deployment; for the shared
+// Gin port use Handler() instead.
+func (s *SocketIO) Listen() {
+	s.build()
 	go s.server.Serve()
 	defer s.server.Close()
 
@@ -79,6 +120,47 @@ func (s *SocketIO) Shutdown() {
 	if s.server != nil {
 		s.server.Close()
 	}
+}
+
+// SetCheckOrigin overrides the CORS origin check. Pass a function that returns
+// true only for allowed origins. Must be called before Handler()/Listen().
+func (s *SocketIO) SetCheckOrigin(fn func(r *http.Request) bool) {
+	s.checkOrigin = fn
+}
+
+// RegisterEvent registers an inbound event handler for an arbitrary event name.
+// The payload is delivered to the handler as a raw JSON string; unmarshal it
+// into your own type. Must be called before Handler()/Listen().
+//
+//	s.RegisterEvent("chatMessage", func(c *socketio.SocketSession, data string) {
+//	    var m MyPayload
+//	    _ = json.Unmarshal([]byte(data), &m)
+//	    // ...
+//	})
+func (s *SocketIO) RegisterEvent(name string, handler func(c *SocketSession, data string)) {
+	if s.events == nil {
+		s.events = make(map[string]interface{})
+	}
+	s.events[name] = func(sock socketio.Conn, data string) {
+		var session *SocketSession
+		if sock.Context() != nil {
+			session = sock.Context().(*SocketSession)
+		}
+		handler(session, data)
+	}
+}
+
+// RegisterRawEvent registers an inbound event handler with full control over
+// the payload type. handler must be a func whose first parameter is
+// socketio.Conn; go-socket.io decodes the event arguments into the remaining
+// parameters by reflection (e.g. func(socketio.Conn, MyStruct)). Use this when
+// you want typed decoding instead of the raw JSON string from RegisterEvent.
+// Must be called before Handler()/Listen().
+func (s *SocketIO) RegisterRawEvent(name string, handler interface{}) {
+	if s.events == nil {
+		s.events = make(map[string]interface{})
+	}
+	s.events[name] = handler
 }
 
 func (h RequestHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -163,6 +245,13 @@ func (s *SocketIO) registerTopics(server *socketio.Server) {
 	})
 }
 
+// registerEvents binds every consumer-registered custom event onto the server.
+func (s *SocketIO) registerEvents(server *socketio.Server) {
+	for name, handler := range s.events {
+		server.OnEvent("/", name, handler)
+	}
+}
+
 func (s *SocketIO) OnNewSessionCallback(callback func(c *SocketSession)) {
 	s.onNewSessionCallback = callback
 }
@@ -198,8 +287,45 @@ func (s *SocketIO) BroadcastToRoom(eventName string, roomId string, data socketm
 	s.server.BroadcastToRoom("/", roomId, eventName, data)
 }
 
+// BroadcastToUser emits an event to every live session belonging to userId.
+// Use this to push a message to a specific user from outside the socket layer
+// (e.g. an HTTP handler or NATS subscriber) via service.GetInstance().GetSocket().
+func (s *SocketIO) BroadcastToUser(userId string, eventName string, data interface{}) {
+	s.mutex.RLock()
+	sessions := s.socketUsers[userId]
+	s.mutex.RUnlock()
+
+	if sessions == nil {
+		return
+	}
+	for session := range sessions.GetMap() {
+		session.SendEvent(eventName, data)
+	}
+}
+
+// BroadcastToAll emits an event to every connected client on the default namespace.
+func (s *SocketIO) BroadcastToAll(eventName string, data interface{}) {
+	if s.server != nil {
+		s.server.BroadcastToNamespace("/", eventName, data)
+	}
+}
+
+// JoinRoom joins the session to a socket.io room and registers the session
+// under its user id so it can be addressed later via BroadcastToUser. The
+// user-id registration is skipped when UserId is empty (e.g. unauthenticated).
 func (s *SocketIO) JoinRoom(c *SocketSession, roomName string) {
 	c.Conn().Join(roomName)
+	s.RegisterUserSession(c)
+}
+
+// RegisterUserSession records a session under its user id (UserId) so messages
+// can be pushed to that user with BroadcastToUser, without joining any room.
+// Call this once UserId is known (typically right after authentication). It is
+// a no-op when UserId is empty.
+func (s *SocketIO) RegisterUserSession(c *SocketSession) {
+	if c == nil || c.UserId == "" {
+		return
+	}
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 	if s.socketUsers[c.UserId] == nil {
@@ -212,22 +338,21 @@ func (s *SocketIO) Leave(c *SocketSession, roomName string) {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 	c.Conn().Leave(roomName)
-	room, ok := s.socketUsers[c.UserId]
+	sessions, ok := s.socketUsers[c.UserId]
 
 	if ok {
-		roomsList := room.GetMap()
-		for k := range roomsList {
-			if k.conn.ID() == c.conn.ID() {
-				if len(k.Conn().Rooms()) == 0 {
-					room.Remove(k)
+		for session := range sessions.GetMap() {
+			if session.conn.ID() == c.conn.ID() {
+				if len(session.Conn().Rooms()) == 0 {
+					sessions.Remove(session)
 				}
 			}
 		}
 
-		if room.Size() == 0 {
+		if sessions.Size() == 0 {
 			delete(s.socketUsers, c.UserId)
 		} else {
-			s.socketUsers[c.UserId] = room
+			s.socketUsers[c.UserId] = sessions
 		}
 	}
 }
@@ -237,9 +362,9 @@ func (s *SocketIO) LeaveAll(c *SocketSession) {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 
-	room, ok := s.socketUsers[c.UserId]
+	sessions, ok := s.socketUsers[c.UserId]
 	if ok {
-		room.Clear()
+		sessions.Clear()
 		delete(s.socketUsers, c.UserId)
 	}
 }

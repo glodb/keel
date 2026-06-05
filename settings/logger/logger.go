@@ -22,9 +22,13 @@ type Logger struct {
 
 var getLoggerInstance = sync.OnceValue(func() *Logger {
 	logger := &Logger{}
-	logger.initLogger()
+	logger.initLogger("", "")
 	return logger
 })
+
+func NewLogger() *Logger {
+	return &Logger{}
+}
 
 func Log() *Logger {
 	return getLoggerInstance()
@@ -35,8 +39,22 @@ func LogInit(config configinterface.ConfigInterface) *Logger {
 	return getLoggerInstance()
 }
 
+func (l *Logger) Init(timekey string, format string) {
+	l.initLogger(timekey, format)
+}
+
+func (l *Logger) SetSugaredLogger(zapLogger *zap.Logger, sugar *zap.SugaredLogger) {
+	l.zapLogger = zapLogger
+	l.sugar = sugar
+}
+
+func (l *Logger) SetLogger(zapLogger *zap.Logger) {
+	l.zapLogger = zapLogger
+	l.sugar = l.zapLogger.Sugar()
+}
+
 // initLogger initializes the Zap logger with appropriate configuration
-func (l *Logger) initLogger() {
+func (l *Logger) initLogger(timekey string, format string) {
 	// Get environment configuration
 
 	env := "info"
@@ -58,22 +76,30 @@ func (l *Logger) initLogger() {
 		level = zapcore.InfoLevel
 	}
 
+	if timekey == "" {
+		timekey = "timestamp"
+	}
+
+	if format == "" {
+		format = "json"
+	}
+
 	// Configure encoder
 	encoderConfig := zap.NewProductionEncoderConfig()
-	encoderConfig.TimeKey = "timestamp"
+	encoderConfig.TimeKey = timekey
 	encoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
 	encoderConfig.EncodeLevel = zapcore.CapitalLevelEncoder
 	encoderConfig.EncodeCaller = zapcore.ShortCallerEncoder
 
 	// Determine output format
 
-	format := "json"
-
 	var encoder zapcore.Encoder
 	if format == "console" {
 		encoder = zapcore.NewConsoleEncoder(encoderConfig)
-	} else {
+	} else if format == "json" {
 		encoder = zapcore.NewJSONEncoder(encoderConfig)
+	} else {
+		encoder = zapcore.NewConsoleEncoder(encoderConfig)
 	}
 
 	// Create core
@@ -134,14 +160,14 @@ func (l *Logger) Sync() error {
 
 // Debug logs a debug message with structured fields
 func (l *Logger) Debug(msg string, fields ...zap.Field) {
-	if l.config.GetPrintInfo() {
+	if l.config != nil && l.config.GetPrintInfo() {
 		l.zapLogger.Info(msg, fields...)
 	}
 }
 
 // Debugf logs a formatted debug message
 func (l *Logger) Debugf(template string, args ...interface{}) {
-	if l.config.GetPrintInfo() {
+	if l.config != nil && l.config.GetPrintInfo() {
 		l.sugar.Debugf(template, args...)
 	}
 }

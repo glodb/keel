@@ -28,6 +28,7 @@ const (
 type MongoConnection struct {
 	dbName string
 	client *mongo.Client
+	params *ConnectionParams
 }
 
 func (u *MongoConnection) getCustomTLSConfig(caFile string) (*tls.Config, error) {
@@ -49,20 +50,44 @@ func (u *MongoConnection) getCustomTLSConfig(caFile string) (*tls.Config, error)
 }
 
 func (u *MongoConnection) CreateConnection() (ConnectionInterface, error) {
-	var err error
-	var client *mongo.Client
+	var (
+		host, port, username, password, dbName string
+		atlas, secureMongo                     bool
+		certFile, appName                      string
+	)
+
+	if u.params != nil {
+		host = u.params.Host
+		port = u.params.Port
+		username = u.params.Username
+		password = u.params.Password
+		dbName = u.params.DBName
+		atlas = u.params.Atlas
+		secureMongo = u.params.SecureMongo
+		certFile = u.params.CertFile
+		appName = u.params.AppName
+	} else {
+		cfg := configmanager.GetInstance().Mongo
+		host = cfg.Host
+		port = cfg.Port
+		username = cfg.Username
+		password = cfg.Password
+		dbName = cfg.DBName
+		atlas = cfg.Atlas
+		secureMongo = cfg.SecureMongo
+		certFile = cfg.CertFile
+		appName = cfg.AppName
+	}
 
 	logger.Log().Info("Creating MongoDB connection",
-		logger.StringField("username", configmanager.GetInstance().Mongo.Username),
-		logger.StringField("password", configmanager.GetInstance().Mongo.Password),
-		logger.StringField("host", configmanager.GetInstance().Mongo.Host),
-		logger.StringField("port", configmanager.GetInstance().Mongo.Port),
-		logger.StringField("dbName", configmanager.GetInstance().Mongo.DBName),
-		logger.BoolField("atlas", configmanager.GetInstance().Mongo.Atlas),
-		logger.BoolField("secureMongo", configmanager.GetInstance().Mongo.SecureMongo),
-		logger.StringField("certFile", configmanager.GetInstance().Mongo.CertFile),
-		logger.IntField("mongoMaxConnections", configmanager.GetInstance().Mongo.MongoMaxConnections),
-		logger.StringField("appName", configmanager.GetInstance().Mongo.AppName))
+		logger.StringField("username", username),
+		logger.StringField("host", host),
+		logger.StringField("port", port),
+		logger.StringField("dbName", dbName),
+		logger.BoolField("atlas", atlas),
+		logger.BoolField("secureMongo", secureMongo),
+		logger.StringField("certFile", certFile),
+		logger.StringField("appName", appName))
 
 	// Base client options applied to every connection mode.
 	// RetryReads/RetryWrites: driver retries once on stale connections (e.g. Docker closing idle TCP).
@@ -72,17 +97,18 @@ func (u *MongoConnection) CreateConnection() (ConnectionInterface, error) {
 		SetRetryWrites(true).
 		SetMaxConnIdleTime(30 * time.Second)
 
-	if configmanager.GetInstance().Mongo.Atlas {
-		connectionURI := fmt.Sprintf(connectionStringAtlas, configmanager.GetInstance().Mongo.Username, configmanager.GetInstance().Mongo.Password, configmanager.GetInstance().Mongo.Host, configmanager.GetInstance().Mongo.DBName, configmanager.GetInstance().Mongo.AppName)
-		client, err = mongo.NewClient(baseOpts.ApplyURI(connectionURI))
+	var err error
+	var client *mongo.Client
 
+	if atlas {
+		connectionURI := fmt.Sprintf(connectionStringAtlas, username, password, host, dbName, appName)
+		client, err = mongo.NewClient(baseOpts.ApplyURI(connectionURI))
 		if err != nil {
 			return nil, errors.New("failed to create client")
 		}
-
-	} else if configmanager.GetInstance().Mongo.SecureMongo {
-		connectionURI := fmt.Sprintf(connectionStringMain, configmanager.GetInstance().Mongo.Username, configmanager.GetInstance().Mongo.Password, configmanager.GetInstance().Mongo.Host+":"+configmanager.GetInstance().Mongo.Port, configmanager.GetInstance().Mongo.DBName, readPreference)
-		tlsConfig, err := u.getCustomTLSConfig(configmanager.GetInstance().Mongo.CertFile)
+	} else if secureMongo {
+		connectionURI := fmt.Sprintf(connectionStringMain, username, password, host+":"+port, dbName, readPreference)
+		tlsConfig, err := u.getCustomTLSConfig(certFile)
 		if err != nil {
 			return nil, errors.New("unable to get tls config")
 		}
@@ -91,9 +117,8 @@ func (u *MongoConnection) CreateConnection() (ConnectionInterface, error) {
 			return nil, errors.New("failed to create client")
 		}
 	} else {
-		connectionURI := fmt.Sprintf(connectionStringDev, configmanager.GetInstance().Mongo.Host+":"+configmanager.GetInstance().Mongo.Port, configmanager.GetInstance().Mongo.DBName)
+		connectionURI := fmt.Sprintf(connectionStringDev, host+":"+port, dbName)
 		client, err = mongo.NewClient(baseOpts.ApplyURI(connectionURI))
-
 		if err != nil {
 			return nil, errors.New("failed to create client")
 		}
@@ -115,7 +140,7 @@ func (u *MongoConnection) CreateConnection() (ConnectionInterface, error) {
 		return nil, err
 	}
 	u.client = client
-	u.dbName = configmanager.GetInstance().Mongo.DBName
+	u.dbName = dbName
 	return u, nil
 }
 
@@ -138,11 +163,19 @@ func (u *MongoConnection) Ping(ctx context.Context) error {
 }
 
 func (u *MongoConnection) GetConnectionInfo() ConnectionInfo {
-	config := configmanager.GetInstance().Mongo
+	var host, port string
+	if u.params != nil {
+		host = u.params.Host
+		port = u.params.Port
+	} else {
+		cfg := configmanager.GetInstance().Mongo
+		host = cfg.Host
+		port = cfg.Port
+	}
 	return ConnectionInfo{
 		DatabaseType: basetypes.MONGO,
-		Host:         config.Host,
-		Port:         config.Port,
+		Host:         host,
+		Port:         port,
 		DatabaseName: u.dbName,
 		ConnectionState: func() string {
 			if u.client != nil {

@@ -38,6 +38,13 @@ var getInstance = sync.OnceValue(func() *MeilisearchClient {
 	return instance
 })
 
+func NewMeilisearchClient(host string, apiKey string) *MeilisearchClient {
+	instance := &MeilisearchClient{}
+	client := meili.New(host, meili.WithAPIKey(apiKey))
+	instance.client = client
+	return instance
+}
+
 func GetInstance() *MeilisearchClient {
 	return getInstance()
 }

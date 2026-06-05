@@ -14,6 +14,12 @@ var getInstance = sync.OnceValue(func() *cookie {
 	return instance
 })
 
+func NewCookie(secureCookieHash, secureCookieBlock string) *cookie {
+	return &cookie{
+		secureCookie: securecookie.New([]byte(secureCookieHash), []byte(secureCookieBlock)),
+	}
+}
+
 type cookie struct {
 	secureCookie *securecookie.SecureCookie
 }

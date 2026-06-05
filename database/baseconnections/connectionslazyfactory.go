@@ -14,12 +14,13 @@ import (
 
 // ConnectionPool manages database connections with proper lifecycle management
 type ConnectionPool struct {
-	connections   map[basetypes.DbType]ConnectionInterface
-	activeQueries map[basetypes.DbType]*int64 // Track number of active queries per connection (atomic)
-	mutex         sync.RWMutex
-	logger        *logger.Logger
-	healthCheck   *time.Ticker
-	stopChan      chan struct{}
+	connections      map[basetypes.DbType]ConnectionInterface
+	activeQueries    map[basetypes.DbType]*int64 // Track number of active queries per connection (atomic)
+	connectionParams map[basetypes.DbType]ConnectionParams
+	mutex            sync.RWMutex
+	logger           *logger.Logger
+	healthCheck      *time.Ticker
+	stopChan         chan struct{}
 }
 
 var (
@@ -31,14 +32,39 @@ var (
 func GetConnectionPool() *ConnectionPool {
 	connectionPoolOnce.Do(func() {
 		connectionPoolInstance = &ConnectionPool{
-			connections:   make(map[basetypes.DbType]ConnectionInterface),
-			activeQueries: make(map[basetypes.DbType]*int64),
-			logger:        logger.Log(),
-			stopChan:      make(chan struct{}),
+			connections:      make(map[basetypes.DbType]ConnectionInterface),
+			activeQueries:    make(map[basetypes.DbType]*int64),
+			connectionParams: make(map[basetypes.DbType]ConnectionParams),
+			logger:           logger.Log(),
+			stopChan:         make(chan struct{}),
 		}
 		connectionPoolInstance.startHealthChecker()
 	})
 	return connectionPoolInstance
+}
+
+func NewConnectionPool() *ConnectionPool {
+	instance := &ConnectionPool{
+		connections:      make(map[basetypes.DbType]ConnectionInterface),
+		activeQueries:    make(map[basetypes.DbType]*int64),
+		connectionParams: make(map[basetypes.DbType]ConnectionParams),
+		logger:           logger.Log(),
+		stopChan:         make(chan struct{}),
+	}
+	instance.startHealthChecker()
+
+	return instance
+}
+
+// RegisterConnection stores connection parameters for the given database type so they
+// are used instead of (or as an override of) the configmanager / env-var values the
+// next time a connection of that type is dialed. It returns the pool itself so calls
+// can be chained. Must be called before the first GetConnection for that dbType.
+func (cp *ConnectionPool) RegisterConnection(dbType basetypes.DbType, params ConnectionParams) *ConnectionPool {
+	cp.mutex.Lock()
+	cp.connectionParams[dbType] = params
+	cp.mutex.Unlock()
+	return cp
 }
 
 // GetConnection retrieves or creates a database connection for the specified type
@@ -81,12 +107,18 @@ func (cp *ConnectionPool) createConnection(ctx context.Context, dbType basetypes
 		return connection, nil
 	}
 
+	// Retrieve registered params (if any) while still holding the write lock.
+	registeredParams, hasParams := cp.connectionParams[dbType]
+
 	var connection ConnectionInterface
 	var err error
 
 	switch dbType {
 	case basetypes.MYSQL:
 		mysqlConn := &MysqlConnection{}
+		if hasParams {
+			mysqlConn.params = &registeredParams
+		}
 		connection, err = mysqlConn.CreateConnection()
 		if err != nil {
 			return nil, errors.NewDatabaseError("mysql connection creation", err).
@@ -95,6 +127,9 @@ func (cp *ConnectionPool) createConnection(ctx context.Context, dbType basetypes
 
 	case basetypes.PSQL:
 		psqlConn := &PsqlConnection{}
+		if hasParams {
+			psqlConn.params = &registeredParams
+		}
 		connection, err = psqlConn.CreateConnection()
 		if err != nil {
 			return nil, errors.NewDatabaseError("postgresql connection creation", err).
@@ -103,6 +138,9 @@ func (cp *ConnectionPool) createConnection(ctx context.Context, dbType basetypes
 
 	case basetypes.MONGO:
 		mongoConn := &MongoConnection{}
+		if hasParams {
+			mongoConn.params = &registeredParams
+		}
 		connection, err = mongoConn.CreateConnection()
 		if err != nil {
 			return nil, errors.NewDatabaseError("mongodb connection creation", err).

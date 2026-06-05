@@ -60,6 +60,7 @@ type Operation struct {
 	Summary     string                `json:"summary"`
 	Description string                `json:"description"`
 	Tags        []string              `json:"tags,omitempty"`
+	Deprecated  bool                  `json:"deprecated,omitempty"`
 	RequestBody *RequestBody          `json:"requestBody,omitempty"`
 	Responses   map[string]*Response  `json:"responses"`
 	Parameters  []*Parameter          `json:"parameters,omitempty"`

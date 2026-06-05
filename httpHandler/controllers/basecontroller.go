@@ -17,6 +17,7 @@ func (bc *BaseController) GetDBName() basetypes.DBName {
 	return basetypes.DBName(configmanager.GetInstance().Mongo.DBName)
 }
 
-func (b *BaseController) SetDependencies(f baseinterfaces.BaseFunctionsInterface) {
+func (b *BaseController) SetDependencies(f baseinterfaces.BaseFunctionsInterface, c baseinterfaces.BaseControllerFactory) {
 	b.BaseFunctionsInterface = f
+	b.BaseControllerFactory = c
 }

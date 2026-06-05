@@ -38,6 +38,12 @@ func GetInstance() *notifications {
 	return getInstance()
 }
 
+func NewNotifications(maxConnections int) *notifications {
+	instance := &notifications{}
+	instance.semaphore = semaphore.NewWeighted(int64(maxConnections))
+	return instance
+}
+
 func (c *notifications) CreateController(notificationType int) (NotificationSender, error) {
 
 	switch notificationType {

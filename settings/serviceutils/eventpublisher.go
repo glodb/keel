@@ -8,8 +8,8 @@ import (
 
 	"github.com/glodb/keel/settings/configmanager"
 	"github.com/glodb/keel/settings/logger"
-	"github.com/glodb/keel/settings/topics"
-	"github.com/glodb/keel/settings/utils"
+	"github.com/glodb/keel/internal/topics"
+	"github.com/glodb/keel/internal/utils"
 	"github.com/glodb/keel/settings/utilsdatatypes"
 
 	"github.com/bytedance/sonic"

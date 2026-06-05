@@ -13,13 +13,30 @@ import (
 	"github.com/glodb/keel/settings/logger"
 )
 
-// Keeping it open MysqlConnectionfor multiple db or own db connections in microservices
+// Keeping it open for multiple db or own db connections in microservices
 type PsqlConnection struct {
-	db *sql.DB
+	db     *sql.DB
+	params *ConnectionParams
 }
 
 func (u *PsqlConnection) CreateConnection() (ConnectionInterface, error) {
-	dsn := "postgres://" + configmanager.GetInstance().PSql.Username + ":" + configmanager.GetInstance().PSql.Password + "@" + configmanager.GetInstance().PSql.Host + ":" + configmanager.GetInstance().PSql.Port + "?sslmode=disable"
+	var host, port, username, password, dbName string
+	if u.params != nil {
+		host = u.params.Host
+		port = u.params.Port
+		username = u.params.Username
+		password = u.params.Password
+		dbName = u.params.DBName
+	} else {
+		cfg := configmanager.GetInstance().PSql
+		host = cfg.Host
+		port = cfg.Port
+		username = cfg.Username
+		password = cfg.Password
+		dbName = cfg.DBName
+	}
+
+	dsn := "postgres://" + username + ":" + password + "@" + host + ":" + port + "?sslmode=disable"
 
 	db, err := sql.Open("postgres", dsn)
 
@@ -28,8 +45,6 @@ func (u *PsqlConnection) CreateConnection() (ConnectionInterface, error) {
 	}
 
 	defer db.Close()
-
-	dbName := configmanager.GetInstance().PSql.DBName
 	checkDBQuery := fmt.Sprintf("SELECT 1 FROM pg_database WHERE datname='%s'", dbName)
 	var exists int
 	err = db.QueryRow(checkDBQuery).Scan(&exists)
@@ -52,7 +67,7 @@ func (u *PsqlConnection) CreateConnection() (ConnectionInterface, error) {
 		logger.Log().Info("Database already exists", logger.StringField("database_name", dbName))
 	}
 
-	dsn = "postgres://" + configmanager.GetInstance().PSql.Username + ":" + configmanager.GetInstance().PSql.Password + "@" + configmanager.GetInstance().PSql.Host + ":" + configmanager.GetInstance().PSql.Port + "/" + configmanager.GetInstance().PSql.DBName + "?sslmode=disable"
+	dsn = "postgres://" + username + ":" + password + "@" + host + ":" + port + "/" + dbName + "?sslmode=disable"
 
 	newdb, err := sql.Open("postgres", dsn)
 
@@ -83,12 +98,22 @@ func (u *PsqlConnection) Ping(ctx context.Context) error {
 }
 
 func (u *PsqlConnection) GetConnectionInfo() ConnectionInfo {
-	config := configmanager.GetInstance().PSql
+	var host, port, dbname string
+	if u.params != nil {
+		host = u.params.Host
+		port = u.params.Port
+		dbname = u.params.DBName
+	} else {
+		cfg := configmanager.GetInstance().PSql
+		host = cfg.Host
+		port = cfg.Port
+		dbname = cfg.DBName
+	}
 	return ConnectionInfo{
 		DatabaseType: basetypes.PSQL,
-		Host:         config.Host,
-		Port:         config.Port,
-		DatabaseName: config.DBName,
+		Host:         host,
+		Port:         port,
+		DatabaseName: dbname,
 		ConnectionState: func() string {
 			if u.db != nil {
 				return "connected"

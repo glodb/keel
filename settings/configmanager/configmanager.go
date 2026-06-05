@@ -30,87 +30,275 @@ func Configure(env, service string) {
 // Local config has preference over global config.
 // Environment variables have preference over local config.
 
+// config is the single source of truth for all runtime configuration.
+//
+// Fields are loaded from two JSON files (global then service, service wins),
+// then overridden by environment variables (see loadFromSystemEnv).
+// Use NewConfig() + LoadFromBytes() + SetGlobalInstance() to supply config
+// programmatically without any files on disk.
+//
+// Required fields are enforced by validateConfig() at startup and will produce
+// error-level log lines but will NOT crash the process.
+//
+// Legend used in field comments:
+//
+//	[REQUIRED] — must be set; startup validation will report an error if absent
+//	[OPTIONAL] — safe to omit; zero value is used or the feature is disabled
 type config struct {
-	// --- keel-internal fields ---
 
-	ClassName      string `json:"className"`
-	Address        string `json:"address"`
-	DeploymentEnv  string `json:"deploymentEnv"`
-	IsProduction   bool   `json:"isProduction"`
-	Production     bool   `json:"production"`
-	PrintWarning   bool   `json:"printWarning"`
-	PrintInfo      bool   `json:"printInfo"`
+	// ── Core ─────────────────────────────────────────────────────────────────
+
+	// ClassName is auto-set to the service name passed to Configure(). Do not
+	// set this in JSON — it is overwritten on load.
+	// [OPTIONAL] set programmatically
+	ClassName string `json:"className"`
+
+	// Address is the host:port the HTTP server listens on (e.g. ":8080").
+	// [REQUIRED]
+	Address string `json:"address"`
+
+	// DeploymentEnv tags every Redis cache key and is used for environment-
+	// aware behaviour. Must be one of: DEV, DEVELOPMENT, TEST, TESTING,
+	// STAGING, PROD, PRODUCTION (case-insensitive).
+	// Defaults to the env identifier passed to Configure() (e.g. "DEV").
+	// Override via DEPLOYMENT_ENV env var.
+	// [OPTIONAL — defaults to the Configure() env argument]
+	DeploymentEnv string `json:"deploymentEnv"`
+
+	// IsProduction / Production — either flag puts Gin in release mode.
+	// [OPTIONAL — default false]
+	IsProduction bool `json:"isProduction"`
+	Production   bool `json:"production"`
+
+	// PrintWarning / PrintInfo gate the Debug/Debugf log helpers on the
+	// global logger.  Set PrintInfo=true in dev to see verbose output.
+	// [OPTIONAL — default false]
+	PrintWarning bool `json:"printWarning"`
+	PrintInfo    bool `json:"printInfo"`
+
+	// MicroServiceName is a human-readable label used in tracing / OpenAPI.
+	// [OPTIONAL]
 	MicroServiceName string `json:"microServiceName"`
 
-	// Databases
-	PSql  configmodels.PSqlConfig  `json:"psql"`
+	// ── Databases ────────────────────────────────────────────────────────────
+	// At least one database block must be populated if you use the database
+	// layer.  Fields within each block that are required when the block is
+	// non-empty are documented in the configmodels package.
+
+	// PSql holds PostgreSQL connection settings.
+	// [OPTIONAL — omit if not using PostgreSQL]
+	PSql configmodels.PSqlConfig `json:"psql"`
+
+	// MySql holds MySQL connection settings.
+	// [OPTIONAL — omit if not using MySQL]
 	MySql configmodels.MySqlConfig `json:"mysql"`
+
+	// Mongo holds MongoDB connection settings.
+	// [OPTIONAL — omit if not using MongoDB]
 	Mongo configmodels.MongoConfig `json:"mongo"`
 
-	// Messaging / pubsub
-	NatsServerAddress        string                 `json:"natsServer"`
-	RegisteredTopics         []string               `json:"registeredTopics"`
-	PublishingTopics         []string               `json:"publishingTopics"`
-	RpcRequestTopics         []string               `json:"rpcRequestTopics"`
-	SubscribedTopics         map[string]interface{} `json:"subscribedTopics"`
+	// ── Messaging / NATS pubsub ───────────────────────────────────────────────
+
+	// NatsServerAddress is the NATS server URL (e.g. "nats://localhost:4222").
+	// Override via NATS_SERVER env var.
+	// [OPTIONAL — omit if not using NATS]
+	NatsServerAddress string `json:"natsServer"`
+
+	// RegisteredTopics lists NATS subjects this service creates/owns.
+	// [OPTIONAL]
+	RegisteredTopics []string `json:"registeredTopics"`
+
+	// PublishingTopics lists NATS subjects this service publishes to.
+	// [OPTIONAL]
+	PublishingTopics []string `json:"publishingTopics"`
+
+	// RpcRequestTopics lists NATS subjects used for outbound RPC requests.
+	// [OPTIONAL]
+	RpcRequestTopics []string `json:"rpcRequestTopics"`
+
+	// SubscribedTopics maps NATS queue-group subjects → handler config.
+	// [OPTIONAL]
+	SubscribedTopics map[string]interface{} `json:"subscribedTopics"`
+
+	// NonQueueSubscribedTopics is like SubscribedTopics but without queue
+	// groups (every subscriber receives every message).
+	// [OPTIONAL]
 	NonQueueSubscribedTopics map[string]interface{} `json:"nonQueueSubscribedTopics"`
-	RpcSubscribedTopics      map[string]interface{} `json:"rpcSubscribedTopics"`
-	PublisherBatchSize       int64                  `json:"publisherBatchSize"`
 
-	// Cache / Redis
-	CacheType          string                       `json:"cacheType"`
-	Redis              configmodels.RedisConnection `json:"redis"`
-	RedisRetries       int                          `json:"redisRetries"`
-	RedisRetryInterval int                          `json:"redisRetryInterval"`
-	CacheContextTimeout int64                       `json:"cacheContextTimeout"`
+	// RpcSubscribedTopics maps NATS subjects → handler config for inbound RPC.
+	// [OPTIONAL]
+	RpcSubscribedTopics map[string]interface{} `json:"rpcSubscribedTopics"`
 
-	// HTTP / routing
+	// PublisherBatchSize is the max number of messages bundled in one NATS
+	// publish call.  Must be ≤ 10 000.  0 disables batching.
+	// [OPTIONAL — default 0]
+	PublisherBatchSize int64 `json:"publisherBatchSize"`
+
+	// ── Cache / Redis ─────────────────────────────────────────────────────────
+
+	// CacheType selects the cache backend (currently only "redis" is supported).
+	// [OPTIONAL — omit to disable caching]
+	CacheType string `json:"cacheType"`
+
+	// Redis holds the Redis connection pool settings.
+	// [OPTIONAL — required only when CacheType = "redis"]
+	Redis configmodels.RedisConnection `json:"redis"`
+
+	// RedisRetries is the number of retries when acquiring a distributed lock
+	// (total attempts = 1 + RedisRetries).  Must be ≤ 10.
+	// [OPTIONAL — default 0 (one attempt, no retries)]
+	RedisRetries int `json:"redisRetries"`
+
+	// RedisRetryInterval is the sleep duration in milliseconds between lock
+	// acquisition retries.
+	// [OPTIONAL — default 0]
+	RedisRetryInterval int `json:"redisRetryInterval"`
+
+	// CacheContextTimeout is the max seconds a cache operation may block.
+	// Must be ≤ 60.
+	// [OPTIONAL — default 0 (no timeout enforced beyond the caller's context)]
+	CacheContextTimeout int64 `json:"cacheContextTimeout"`
+
+	// ── HTTP / routing ────────────────────────────────────────────────────────
+	// These three fields control how route paths are assembled.
+	// Final Gin path = ServiceLBName + ApiPrefix + "/" + Apis.ApiName
+
+	// ServiceLBName is a path prefix prepended to every route, typically the
+	// service's load-balancer path (e.g. "/api/v1").  May be empty.
+	// [OPTIONAL]
 	ServiceLBName string `json:"serviceLBName"`
-	ApiPrefix        string `json:"apiPrefix"`
-	PageSize         int    `json:"pageSize"`
-	MaxPageSize      int    `json:"maxPageSize"`
-	SortKey          string `json:"sortKey"`
-	TimeRangeKey     string `json:"timeRangeKey"`
 
-	// RPC
+	// ApiPrefix is a path segment inserted between ServiceLBName and each
+	// individual route name (e.g. "/users").  May be empty.
+	// [OPTIONAL]
+	ApiPrefix string `json:"apiPrefix"`
+
+	// PageSize is the default number of items returned in paginated responses.
+	// Must be ≤ MaxPageSize when both are set.
+	// [OPTIONAL — default 0]
+	PageSize int `json:"pageSize"`
+
+	// MaxPageSize caps the page size a client may request.  Must be ≤ 10 000.
+	// [OPTIONAL — default 0 (no cap)]
+	MaxPageSize int `json:"maxPageSize"`
+
+	// SortKey is the query-parameter name used to specify sort order.
+	// [OPTIONAL]
+	SortKey string `json:"sortKey"`
+
+	// TimeRangeKey is the query-parameter name used for time-range filtering.
+	// [OPTIONAL]
+	TimeRangeKey string `json:"timeRangeKey"`
+
+	// ── RPC ───────────────────────────────────────────────────────────────────
+
+	// RPCRequestExpirySeconds is how long an outbound RPC request waits for a
+	// reply before timing out.  Must be ≤ 300.
+	// [OPTIONAL — default 0]
 	RPCRequestExpirySeconds int `json:"rpcRequestExpirySeconds"`
 
-	// Secure cookies (used by settings/cookie)
-	SecureCookieHash  string `json:"secureCookieHash"`
+	// ── Secure cookies ────────────────────────────────────────────────────────
+
+	// SecureCookieHash is the HMAC key for the securecookie package (32 bytes).
+	// [OPTIONAL — required only if using settings/cookie]
+	SecureCookieHash string `json:"secureCookieHash"`
+
+	// SecureCookieBlock is the AES encryption key (16, 24, or 32 bytes).
+	// [OPTIONAL — required only if using settings/cookie with encryption]
 	SecureCookieBlock string `json:"secureCookieBlock"`
 
-	// Soft-delete keys (used by database drivers)
-	SoftDeleteCollectionPrefix string `json:"softDeleteCollectionPrefix"`
-	SoftDeletionKey            string `json:"softDeletionKey"`
-	DeletedByKey               string `json:"deletedByKey"`
+	// ── Soft-delete keys ──────────────────────────────────────────────────────
 
-	// Migrations
+	// SoftDeleteCollectionPrefix is prepended to collection names for soft-
+	// deleted record storage.
+	// [OPTIONAL]
+	SoftDeleteCollectionPrefix string `json:"softDeleteCollectionPrefix"`
+
+	// SoftDeletionKey is the JSON field name written when a record is soft-deleted.
+	// [OPTIONAL]
+	SoftDeletionKey string `json:"softDeletionKey"`
+
+	// DeletedByKey is the JSON field name recording who soft-deleted a record.
+	// [OPTIONAL]
+	DeletedByKey string `json:"deletedByKey"`
+
+	// ── Migrations ────────────────────────────────────────────────────────────
+
+	// MigrationsPath is the filesystem path to SQL migration files.
+	// [OPTIONAL — required only if using database migrations]
 	MigrationsPath string `json:"migrationsPath"`
 
-	// Notifications
-	Email               configmodels.EmailConfig              `json:"email"`
-	NotificationSender  configmodels.NotificationSenderConfig `json:"notificationSender"`
-	MessageSendingMilliSeconds int                            `json:"messageSendingMilliSeconds"`
+	// ── Notifications ─────────────────────────────────────────────────────────
 
-	// Firebase (notification sender)
+	// Email holds SMTP settings for email delivery.
+	// [OPTIONAL — required only if sending email]
+	Email configmodels.EmailConfig `json:"email"`
+
+	// NotificationSender holds generic sender-channel configuration.
+	// [OPTIONAL]
+	NotificationSender configmodels.NotificationSenderConfig `json:"notificationSender"`
+
+	// MessageSendingMilliSeconds is the minimum interval between notification
+	// sends, in milliseconds.  Must be ≥ 0.
+	// [OPTIONAL — default 0]
+	MessageSendingMilliSeconds int `json:"messageSendingMilliSeconds"`
+
+	// ── Firebase / FCM ────────────────────────────────────────────────────────
+
+	// FirebaseCredentialsFileName is the path to the Firebase service-account
+	// JSON key file (alternative to FirebaseCredentialsJson).
+	// [OPTIONAL]
 	FirebaseCredentialsFileName string `json:"firebaseCredentialsFileName"`
-	FirebaseMessageUrl          string `json:"firebaseMessageUrl"`
-	FirebaseProjectId           string `json:"firebaseProjectId"`
-	FirebaseCredentialsJson     string `json:"firebaseCredentialsJson"`
 
-	// Search
+	// FirebaseMessageUrl is the FCM send endpoint URL.
+	// [OPTIONAL]
+	FirebaseMessageUrl string `json:"firebaseMessageUrl"`
+
+	// FirebaseProjectId is the GCP project ID for the Firebase project.
+	// [OPTIONAL]
+	FirebaseProjectId string `json:"firebaseProjectId"`
+
+	// FirebaseCredentialsJson is the inline JSON of the Firebase service-account
+	// key (alternative to FirebaseCredentialsFileName).
+	// [OPTIONAL]
+	FirebaseCredentialsJson string `json:"firebaseCredentialsJson"`
+
+	// ── Search ────────────────────────────────────────────────────────────────
+
+	// MeilisearchConfig holds the Meilisearch host and API key.
+	// [OPTIONAL — required only if using full-text search]
 	MeilisearchConfig configmodels.MeilisearchConfig `json:"meilisearch"`
 
-	// Observability
-	MetricsPort    string `json:"metricsPort"`
+	// ── Observability ────────────────────────────────────────────────────────
+
+	// MetricsPort is the address (e.g. ":9090") for the Prometheus metrics
+	// HTTP server.  Empty disables the metrics server.
+	// [OPTIONAL]
+	MetricsPort string `json:"metricsPort"`
+
+	// JaegerEndpoint is the Jaeger collector URL for OpenTelemetry traces.
+	// [OPTIONAL]
 	JaegerEndpoint string `json:"jaegerEndpoint"`
-	UsePprof       bool   `json:"usePprof"`
-	PprofAddress   string `json:"pprofAddress"`
 
-	// Socket.IO
-	SocketAddress string `json:"socketAddress"` // e.g. ":9000"; empty means socket server is disabled
+	// UsePprof enables the Go pprof profiling HTTP endpoints.
+	// [OPTIONAL — default false]
+	UsePprof bool `json:"usePprof"`
 
-	// Versioning (keel uses in tracing/openapi)
+	// PprofAddress is the listen address for the pprof server (e.g. ":6060").
+	// [OPTIONAL — required when UsePprof = true]
+	PprofAddress string `json:"pprofAddress"`
+
+	// ── Socket.IO ────────────────────────────────────────────────────────────
+
+	// SocketAddress is the listen address for the Socket.IO server
+	// (e.g. ":9000").  Empty disables the socket server.
+	// [OPTIONAL]
+	SocketAddress string `json:"socketAddress"`
+
+	// ── Versioning ───────────────────────────────────────────────────────────
+
+	// ServiceVersion is embedded in OpenAPI specs and distributed traces.
+	// [OPTIONAL]
 	ServiceVersion genericmodels.Version `json:"serviceVersion"`
 
 	// raw holds the decoded JSON (global merged with service) for consumer-only
@@ -120,12 +308,96 @@ type config struct {
 
 var getInstance = sync.OnceValue(func() *config {
 	instance := &config{}
-	instance.Setup()
+	instance.localSetup()
 	return instance
 })
 
+// NewConfig returns a blank, ready-to-use config instance independent of the
+// singleton. The raw map is initialized so Set() and GetX() helpers work
+// immediately. Populate typed fields directly (e.g. cfg.Mongo.Host = "…")
+// and/or call LoadFromBytes() to unmarshal JSON, then optionally call
+// SetGlobalInstance(cfg) to make keel's own internals use it.
+func NewConfig() *config {
+	return &config{
+		raw: make(map[string]interface{}),
+	}
+}
+
+// globalOverride, when non-nil, is returned by GetInstance() instead of the
+// lazy-loaded singleton. Set it with SetGlobalInstance() before any call to
+// GetInstance() (typically before Boot()) so keel's own internals pick it up.
+var (
+	globalOverride   *config
+	globalOverrideMu sync.RWMutex
+)
+
+// SetGlobalInstance replaces the config that GetInstance() returns.
+// Call this before Boot() (or before the first GetInstance() call) to supply
+// programmatically-built config without disk files. Pairs with NewConfig() and
+// LoadFromBytes().
+//
+//	cfg := configmanager.NewConfig()
+//	cfg.Address = ":8080"
+//	cfg.Mongo.Host = "localhost"
+//	configmanager.SetGlobalInstance(cfg)
+//	keel.Boot("dev", "myservice")
+func SetGlobalInstance(cfg *config) {
+	globalOverrideMu.Lock()
+	globalOverride = cfg
+	globalOverrideMu.Unlock()
+}
+
 func GetInstance() *config {
+	globalOverrideMu.RLock()
+	if globalOverride != nil {
+		defer globalOverrideMu.RUnlock()
+		return globalOverride
+	}
+	globalOverrideMu.RUnlock()
 	return getInstance()
+}
+
+// LoadFromBytes unmarshals global and service JSON config bytes into c without
+// touching the filesystem.  Either argument may be nil/empty.  Service JSON
+// takes precedence over global JSON on overlapping keys, exactly mirroring the
+// file-based Setup() precedence rule.  Environment-variable overrides are
+// applied afterwards, so they still win over everything.
+//
+//	cfg := configmanager.NewConfig()
+//	cfg.LoadFromBytes(globalJSON, serviceJSON)
+//	configmanager.SetGlobalInstance(cfg)
+func (c *config) LoadFromBytes(globalJSON, serviceJSON []byte) error {
+	if c.raw == nil {
+		c.raw = make(map[string]interface{})
+	}
+
+	if len(globalJSON) > 0 {
+		if err := sonic.Unmarshal(globalJSON, c); err != nil {
+			return fmt.Errorf("configmanager: unmarshal global JSON: %w", err)
+		}
+		var raw map[string]interface{}
+		if err := sonic.Unmarshal(globalJSON, &raw); err == nil {
+			for k, v := range raw {
+				c.raw[k] = v
+			}
+		}
+	}
+
+	if len(serviceJSON) > 0 {
+		if err := sonic.Unmarshal(serviceJSON, c); err != nil {
+			return fmt.Errorf("configmanager: unmarshal service JSON: %w", err)
+		}
+		var raw map[string]interface{}
+		if err := sonic.Unmarshal(serviceJSON, &raw); err == nil {
+			for k, v := range raw {
+				c.raw[k] = v
+			}
+		}
+	}
+
+	// Environment variables take the highest precedence.
+	c.loadSecretsFromEnv()
+	return nil
 }
 
 // loadSecretsFromEnv loads sensitive configuration from environment variables.
@@ -304,15 +576,27 @@ func (c *config) loadFromSystemEnv() {
 	}
 }
 
+func (c *config) Setup(configFileName, path, serviceName, workingDir string) {
+	c.setup(configFileName, path, serviceName, workingDir)
+}
+
+func (c *config) localSetup() {
+	configFileName, path, serviceName, workingDir := c.getConfigNameAndPath()
+	c.setup(configFileName, path, serviceName, workingDir)
+}
+
+func (c *config) Set(key string, value interface{}) {
+	c.raw[key] = value
+}
+
 // Setup loads the global and service config files, merges them, then applies
 // environment variable overrides. The raw map is populated for consumer-only
 // fields accessed via the typed GetX helpers.
-func (c *config) Setup() {
-	name, path, serviceName, workingDir := c.getConfigNameAndPath()
+func (c *config) setup(configFileName, path, serviceName, workingDir string) {
 	serviceLowerName := strings.ToLower(serviceName)
 
-	globalConfigPath := workingDir + "/config/" + name + ".json"
-	serviceConfigPath := fmt.Sprintf("%s/services/%s/config/%s.json", workingDir, serviceLowerName, name)
+	globalConfigPath := workingDir + "/config/" + configFileName + ".json"
+	serviceConfigPath := fmt.Sprintf("%s/services/%s/config/%s.json", workingDir, serviceLowerName, configFileName)
 
 	c.raw = make(map[string]interface{})
 
@@ -365,6 +649,14 @@ func (c *config) Setup() {
 	// Environment variable overrides (highest priority).
 	c.loadSecretsFromEnv()
 
+	// When no config file (or env var) set DeploymentEnv, fall back to the
+	// environment identifier used to select the config file (e.g. "DEV", "PROD").
+	// This keeps cache-key prefixes and other env-tagged identifiers consistent
+	// even in test scenarios where no JSON file is present on disk.
+	if c.DeploymentEnv == "" {
+		c.DeploymentEnv = configuredEnv
+	}
+
 	// Validate configuration after loading.
 	if err := c.validateConfig(); err != nil {
 		logger.Log().Error("Configuration validation failed",
@@ -374,7 +666,7 @@ func (c *config) Setup() {
 
 	logger.Log().Info("Configuration loaded successfully",
 		logger.StringField("service", serviceName),
-		logger.StringField("environment", name),
+		logger.StringField("environment", configFileName),
 		logger.StringField("config_path", path),
 	)
 }
