@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/glodb/keel/internal/utils"
+	"github.com/glodb/keel/utils"
 	"github.com/glodb/keel/settings/cachesettings/cache"
 	"github.com/glodb/keel/settings/logger"
 )

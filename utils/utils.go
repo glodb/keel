@@ -42,8 +42,9 @@ var getInstance = sync.OnceValue(func() *Utils {
 })
 
 type Utils struct {
-	digits map[int]string
-	rng    *mrand.Rand
+	digits         map[int]string
+	rng            *mrand.Rand
+	migrationsPath string
 }
 
 // GetInstance returns the singleton Utils instance.
@@ -51,9 +52,27 @@ func GetInstance() *Utils {
 	return getInstance()
 }
 
+// NewUtils creates a standalone Utils instance with the given migrations path.
+// Use this when you need a per-controller instance with a custom path instead
+// of the global singleton.
+func NewUtils(migrationsPath string) *Utils {
+	u := &Utils{
+		migrationsPath: migrationsPath,
+		rng:            mrand.New(mrand.NewSource(time.Now().UnixNano())),
+		digits: map[int]string{
+			0: "0", 1: "1", 2: "2", 3: "3", 4: "4", 5: "5", 6: "6", 7: "7", 8: "8", 9: "9",
+		},
+	}
+	return u
+}
+
 func (u *Utils) CreateMigrations(controller baseinterfaces.Controller, object basemodels.MigrationModels) []mongo.WriteModel {
 
-	filePath := configmanager.GetInstance().MigrationsPath + "/" + string(controller.GetCollectionName()) + ".json"
+	basePath := u.migrationsPath
+	if basePath == "" {
+		basePath = configmanager.GetInstance().MigrationsPath
+	}
+	filePath := basePath + "/" + string(controller.GetCollectionName()) + ".json"
 	filePath = strings.ToLower(filePath)
 	file, err := os.Open(filePath)
 	if err != nil {

@@ -9,7 +9,6 @@ import (
 	"reflect"
 	"sync"
 	"syscall"
-	"time"
 
 	"github.com/glodb/keel/httpHandler/controllers"
 	httpHandler "github.com/glodb/keel/internal/httpHandler"
@@ -251,9 +250,7 @@ func (s *Service) Run(serviceName string, serviceType ServiceType, subscriber se
 		logger.Log().Info("Shutting down server...")
 
 		if httpServer != nil {
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancel()
-			if err := httpServer.Shutdown(ctx); err != nil {
+			if err := httpServer.Shutdown(context.Background()); err != nil {
 				logger.Log().Error("Server forced to shutdown", logger.ErrorField("error", err))
 			}
 		}

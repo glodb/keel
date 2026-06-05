@@ -14,7 +14,7 @@ import (
 	"github.com/glodb/keel/settings/configmanager"
 	"github.com/glodb/keel/settings/customtypes"
 	"github.com/glodb/keel/settings/logger"
-	"github.com/glodb/keel/internal/utils"
+	"github.com/glodb/keel/utils"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"

@@ -8,6 +8,7 @@ import (
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/exporters/jaeger"
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
@@ -105,4 +106,38 @@ func (t *Tracing) GetTraceID(ctx context.Context) string {
 // GetSpanID returns the span ID string from the context.
 func (t *Tracing) GetSpanID(ctx context.Context) string {
 	return trace.SpanFromContext(ctx).SpanContext().SpanID().String()
+}
+
+// TraceHTTPRequest starts a server span for an incoming HTTP request and returns
+// the derived context (carrying the span) along with the span itself. The caller
+// owns the span and must call span.End() when the request completes (typically
+// via defer). route is optional; pass "" when no matched route template exists.
+func (t *Tracing) TraceHTTPRequest(ctx context.Context, method, path, route string) (context.Context, trace.Span) {
+	if t.tracer == nil {
+		t.tracer = otel.Tracer("keel-backend")
+	}
+
+	ctx, span := t.tracer.Start(ctx, method+" "+path,
+		trace.WithSpanKind(trace.SpanKindServer),
+		trace.WithAttributes(
+			attribute.String("http.method", method),
+			attribute.String("http.target", path),
+		),
+	)
+	if route != "" {
+		span.SetAttributes(attribute.String("http.route", route))
+	}
+	return ctx, span
+}
+
+// RecordError records err on the span associated with ctx and marks the span
+// status as Error. It is a no-op when err is nil, so callers can invoke it
+// unconditionally.
+func (t *Tracing) RecordError(ctx context.Context, err error) {
+	if err == nil {
+		return
+	}
+	span := trace.SpanFromContext(ctx)
+	span.RecordError(err)
+	span.SetStatus(codes.Error, err.Error())
 }
