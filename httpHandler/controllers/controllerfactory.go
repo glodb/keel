@@ -12,6 +12,7 @@ import (
 
 type factoryEntry struct {
 	dbType  basetypes.DbType
+	name    string
 	factory func() baseinterfaces.Controller
 }
 
@@ -61,7 +62,7 @@ func (c *controllersObject) WithFunctions(fn func(dbType basetypes.DbType, dbNam
 func Register(dbType basetypes.DbType, name string, factory func() baseinterfaces.Controller) {
 	factoryMu.Lock()
 	defer factoryMu.Unlock()
-	pendingFactories = append(pendingFactories, factoryEntry{dbType: dbType, factory: factory})
+	pendingFactories = append(pendingFactories, factoryEntry{dbType: dbType, name: name, factory: factory})
 }
 
 // InitializeControllersInto drains the pending factory queue and initializes
@@ -78,7 +79,7 @@ func InitializeControllersInto(target *controllersObject) {
 	factoryMu.Unlock()
 
 	for _, e := range factories {
-		target.initialize(e.dbType, e.factory())
+		target.initialize(e.dbType, e.name, e.factory())
 	}
 }
 
@@ -105,7 +106,7 @@ func (c *controllersObject) GetController(dbType basetypes.DbType, controllerTyp
 	return nil, errors.New("controller not found")
 }
 
-func (c *controllersObject) initialize(dbType basetypes.DbType, object baseinterfaces.Controller) {
+func (c *controllersObject) initialize(dbType basetypes.DbType, name string, object baseinterfaces.Controller) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
@@ -130,4 +131,7 @@ func (c *controllersObject) initialize(dbType basetypes.DbType, object baseinter
 	}
 
 	c.controllers[dbType][string(object.GetDBName())] = object
+	if name != "" {
+		c.controllers[dbType][name] = object
+	}
 }

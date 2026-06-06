@@ -81,9 +81,92 @@ func (oag *OpenAPIGenerator) RegisterEndpoint(httpMethod, path string, doc *gene
 		Responses:   make(map[string]*Response),
 	}
 
-	for code, description := range doc.Responses {
-		op.Responses[code] = &Response{Description: description}
+	// --- security ---
+	if len(doc.Security) > 0 {
+		secEntry := make(map[string][]string)
+		for _, s := range doc.Security {
+			secEntry[s] = []string{}
+		}
+		op.Security = []map[string][]string{secEntry}
 	}
+
+	// --- path parameters ---
+	for _, p := range doc.PathParams {
+		op.Parameters = append(op.Parameters, &Parameter{
+			Name:        p.Name,
+			In:          "path",
+			Required:    true,
+			Description: p.Description,
+			Schema:      docParamSchema(p),
+		})
+	}
+
+	// --- query parameters ---
+	for _, p := range doc.QueryParams {
+		op.Parameters = append(op.Parameters, &Parameter{
+			Name:        p.Name,
+			In:          "query",
+			Required:    p.Required,
+			Description: p.Description,
+			Schema:      docParamSchema(p),
+		})
+	}
+
+	// --- request body ---
+	if len(doc.Body) > 0 {
+		bodySchema := &Schema{
+			Type:       "object",
+			Properties: make(map[string]*Schema),
+		}
+		for _, f := range doc.Body {
+			fieldSchema := &Schema{
+				Type:        docFieldType(f.Type),
+				Description: f.Description,
+				Example:     f.Example,
+			}
+			bodySchema.Properties[f.Name] = fieldSchema
+			if f.Required {
+				bodySchema.Required = append(bodySchema.Required, f.Name)
+			}
+		}
+		required := doc.BodyRequired || len(doc.Body) > 0
+		op.RequestBody = &RequestBody{
+			Required: required,
+			Content: map[string]*MediaType{
+				"application/json": {Schema: bodySchema},
+			},
+		}
+	}
+
+	// --- responses (simple) ---
+	for code, description := range doc.Responses {
+		if _, overridden := doc.ResponseBodies[code]; !overridden {
+			op.Responses[code] = &Response{Description: description}
+		}
+	}
+
+	// --- responses (rich with body schema) ---
+	for code, rb := range doc.ResponseBodies {
+		resp := &Response{Description: rb.Description}
+		if len(rb.Body) > 0 {
+			bodySchema := &Schema{
+				Type:       "object",
+				Properties: make(map[string]*Schema),
+			}
+			for _, f := range rb.Body {
+				bodySchema.Properties[f.Name] = &Schema{
+					Type:        docFieldType(f.Type),
+					Description: f.Description,
+					Example:     f.Example,
+				}
+			}
+			resp.Content = map[string]*MediaType{
+				"application/json": {Schema: bodySchema},
+			}
+		}
+		op.Responses[code] = resp
+	}
+
 	if len(op.Responses) == 0 {
 		op.Responses["200"] = &Response{Description: "OK"}
 	}
@@ -104,6 +187,38 @@ func (oag *OpenAPIGenerator) RegisterEndpoint(httpMethod, path string, doc *gene
 		oag.currentSpec.Paths[path].Put = op
 	case "DELETE":
 		oag.currentSpec.Paths[path].Delete = op
+	case "PATCH":
+		oag.currentSpec.Paths[path].Patch = op
+	}
+}
+
+// docParamSchema converts a DocParam type string to an OpenAPI Schema.
+func docParamSchema(p genericmodels.DocParam) *Schema {
+	s := &Schema{
+		Type:    docFieldType(p.Type),
+		Example: p.Example,
+	}
+	if s.Type == "" {
+		s.Type = "string"
+	}
+	return s
+}
+
+// docFieldType normalises a free-text type name to an OpenAPI primitive.
+func docFieldType(t string) string {
+	switch strings.ToLower(t) {
+	case "int", "int32", "int64", "integer":
+		return "integer"
+	case "float", "float32", "float64", "number":
+		return "number"
+	case "bool", "boolean":
+		return "boolean"
+	case "array":
+		return "array"
+	case "object":
+		return "object"
+	default:
+		return "string"
 	}
 }
 

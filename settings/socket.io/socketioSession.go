@@ -20,7 +20,11 @@ func (s *SocketSession) Conn() socketio.Conn {
 }
 
 func (s *SocketSession) SendEvent(eventName string, data interface{}) {
-	s.conn.Emit(eventName, data)
+	// Emit asynchronously: handlers run on the socket read goroutine and
+	// go-socket.io uses an unbuffered write channel, so a synchronous Emit
+	// from a handler would deadlock serveRead/serveWrite.
+	conn := s.conn
+	go conn.Emit(eventName, data)
 }
 
 // CompareTo compares two SocketSession instances based on UserID

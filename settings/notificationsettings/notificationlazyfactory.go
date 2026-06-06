@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	"github.com/glodb/keel/settings/configmanager"
+	"github.com/glodb/keel/settings/logger"
 
 	"golang.org/x/sync/semaphore"
 )
@@ -18,7 +19,7 @@ const (
 	IOSVOIP
 )
 
-type notifications struct {
+type Notifications struct {
 	email          EmailSender
 	latestFcm      FCMSender
 	whatsappsender WhatsappSender
@@ -27,30 +28,34 @@ type notifications struct {
 	semaphore *semaphore.Weighted
 }
 
-var getInstance = sync.OnceValue(func() *notifications {
-	instance := &notifications{}
+var getInstance = sync.OnceValue(func() *Notifications {
+	instance := &Notifications{}
 	instance.semaphore = semaphore.NewWeighted(int64(configmanager.GetInstance().NotificationSender.MaxConnections))
 	return instance
 })
 
 // Singleton. Returns a single object of Factory
-func GetInstance() *notifications {
+func GetInstance() *Notifications {
 	return getInstance()
 }
 
-func NewNotifications(maxConnections int) *notifications {
-	instance := &notifications{}
+func NewNotifications(maxConnections int) *Notifications {
+	instance := &Notifications{}
 	instance.semaphore = semaphore.NewWeighted(int64(maxConnections))
 	return instance
 }
 
-func (c *notifications) CreateController(notificationType int) (NotificationSender, error) {
+func (c *Notifications) CreateController(notificationType int) (NotificationSender, error) {
 
 	switch notificationType {
 	case SENDEMAIL:
 		if !c.email.IsInitialized() {
 			c.email = EmailSender{}
-			c.email.Init(c.semaphore)
+			if _, err := c.email.Init(c.semaphore); err != nil {
+				logger.Log().Error("email sender init failed", logger.ErrorField("error", err))
+				c.email = EmailSender{}
+				return nil, err
+			}
 			c.email.Enable()
 		}
 		return &c.email, nil

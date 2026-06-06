@@ -18,10 +18,11 @@ import (
 )
 
 type Tracing struct {
-	tracer trace.Tracer
-	tp     *sdktrace.TracerProvider
-	logger *zap.Logger
-	mu     sync.RWMutex
+	tracer  trace.Tracer
+	tp      *sdktrace.TracerProvider
+	logger  *zap.Logger
+	mu      sync.RWMutex
+	enabled bool
 }
 
 var (
@@ -38,14 +39,38 @@ func GetInstance() *Tracing {
 
 func newTracing() *Tracing {
 	t := &Tracing{logger: zap.L()}
-	t.initialize(configmanager.GetInstance().ServiceLBName, configmanager.GetInstance().JaegerEndpoint, configmanager.GetInstance().ServiceVersion.String(), configmanager.GetInstance().DeploymentEnv)
+	cfg := configmanager.GetInstance()
+	if !cfg.UseTracing {
+		t.setupNoOp(cfg.ServiceLBName)
+		return t
+	}
+	t.initialize(cfg.ServiceLBName, cfg.JaegerEndpoint, cfg.ServiceVersion.String(), cfg.DeploymentEnv)
 	return t
 }
 
 func NewTracing(serviceName string, jaegerEndpoint string, version string, environment string) *Tracing {
 	t := &Tracing{logger: zap.L()}
+	if jaegerEndpoint == "" {
+		t.setupNoOp(serviceName)
+		return t
+	}
 	t.initialize(serviceName, jaegerEndpoint, version, environment)
 	return t
+}
+
+func (t *Tracing) setupNoOp(serviceName string) {
+	if serviceName == "" {
+		serviceName = "keel-backend"
+	}
+	t.enabled = false
+	t.tp = sdktrace.NewTracerProvider(sdktrace.WithSampler(sdktrace.NeverSample()))
+	otel.SetTracerProvider(t.tp)
+	t.tracer = otel.Tracer(serviceName)
+}
+
+// Enabled reports whether tracing export is active.
+func (t *Tracing) Enabled() bool {
+	return t.enabled
 }
 
 func (t *Tracing) initialize(serviceName string, jaegerEndpoint string, version string, environment string) {
@@ -56,9 +81,7 @@ func (t *Tracing) initialize(serviceName string, jaegerEndpoint string, version 
 	exporter, err := jaeger.New(jaeger.WithCollectorEndpoint(jaeger.WithEndpoint(jaegerEndpoint)))
 	if err != nil {
 		t.logger.Error("Failed to create Jaeger exporter, using no-op tracer", zap.Error(err))
-		t.tp = sdktrace.NewTracerProvider(sdktrace.WithSampler(sdktrace.NeverSample()))
-		otel.SetTracerProvider(t.tp)
-		t.tracer = otel.Tracer(serviceName)
+		t.setupNoOp(serviceName)
 		return
 	}
 
@@ -71,9 +94,7 @@ func (t *Tracing) initialize(serviceName string, jaegerEndpoint string, version 
 	)
 	if err != nil {
 		t.logger.Error("Failed to create resource, using no-op tracer", zap.Error(err))
-		t.tp = sdktrace.NewTracerProvider(sdktrace.WithSampler(sdktrace.NeverSample()))
-		otel.SetTracerProvider(t.tp)
-		t.tracer = otel.Tracer(serviceName)
+		t.setupNoOp(serviceName)
 		return
 	}
 
@@ -83,6 +104,7 @@ func (t *Tracing) initialize(serviceName string, jaegerEndpoint string, version 
 	)
 	otel.SetTracerProvider(t.tp)
 	t.tracer = otel.Tracer(serviceName)
+	t.enabled = true
 
 	t.logger.Info("Tracing initialized",
 		zap.String("service", serviceName),

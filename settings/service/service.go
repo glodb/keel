@@ -34,6 +34,7 @@ type socketConfig struct {
 	onError      func(c *socketio.SocketSession, err error)
 	onMessage    func(c *socketio.SocketSession, message socketmodels.Message)
 	events       map[string]func(c *socketio.SocketSession, data string)
+	rawEvents    map[string]interface{}
 	checkOrigin  func(r *http.Request) bool
 }
 
@@ -101,6 +102,16 @@ func (s *Service) RegisterSocketEvent(name string, handler func(c *socketio.Sock
 	return s
 }
 
+// RegisterSocketRawEvent registers an inbound handler with typed payload decoding.
+// handler must be func(socketio.Conn, YourStruct). Must be called before Run.
+func (s *Service) RegisterSocketRawEvent(name string, handler interface{}) *Service {
+	if s.socketCfg.rawEvents == nil {
+		s.socketCfg.rawEvents = make(map[string]interface{})
+	}
+	s.socketCfg.rawEvents[name] = handler
+	return s
+}
+
 // SetSocketCORS overrides the socket.io CORS origin check (default allow-all).
 // Must be called before Run.
 func (s *Service) SetSocketCORS(fn func(r *http.Request) bool) *Service {
@@ -128,6 +139,9 @@ func (s *Service) applySocketConfig() {
 	}
 	for name, handler := range s.socketCfg.events {
 		s.socketServer.RegisterEvent(name, handler)
+	}
+	for name, handler := range s.socketCfg.rawEvents {
+		s.socketServer.RegisterRawEvent(name, handler)
 	}
 }
 
@@ -171,7 +185,7 @@ func (s *Service) SetAddress(address string) *Service {
 	return s
 }
 
-func (s *Service) Run(serviceName string, serviceType ServiceType, subscriber serviceutils.SubscriptionInterface, middlewares map[string][]basemiddlewares.Middleware) error {
+func (s *Service) Run(serviceName string, serviceType ServiceType, subscriber serviceutils.SubscriptionInterface, middlewares map[string][]basemiddlewares.Middleware, queue bool) error {
 
 	logger.Log().Info(fmt.Sprintf("%s starting...", serviceName))
 
@@ -180,7 +194,12 @@ func (s *Service) Run(serviceName string, serviceType ServiceType, subscriber se
 		address = s.address
 	}
 	err := panicrecovery.InitializerWithRecovery(func() error {
-		return s.registerSubscriber(subscriber)
+
+		if queue {
+			return s.registerSubscriber(subscriber, serviceName)
+		} else {
+			return s.registerSubscriber(subscriber, "")
+		}
 	}, fmt.Sprintf("%s.AssignSubscriber", serviceName))
 	if err != nil {
 		logger.Log().Error("Failed to assign subscriber", logger.ErrorField("error", err))
@@ -261,7 +280,7 @@ func (s *Service) Run(serviceName string, serviceType ServiceType, subscriber se
 	return nil
 }
 
-func (s *Service) registerSubscriber(subscriber serviceutils.SubscriptionInterface) error {
+func (s *Service) registerSubscriber(subscriber serviceutils.SubscriptionInterface, queueName string) error {
 
 	subscriber.Init()
 	// Get subscribed topics
@@ -275,7 +294,12 @@ func (s *Service) registerSubscriber(subscriber serviceutils.SubscriptionInterfa
 			m := reflect.ValueOf(subscriber).MethodByName(v.(string))
 			mCallable := m.Interface().(func(msg *nats.Msg))
 			// Subscribe to the topic with the corresponding method
-			serviceutils.GetInstance().GetNats().QueueSubscribe(k, configmanager.GetInstance().ClassName, mCallable)
+
+			if queueName != "" {
+				serviceutils.GetInstance().GetNats().QueueSubscribe(k, queueName, mCallable)
+			} else {
+				serviceutils.GetInstance().GetNats().Subscribe(k, mCallable)
+			}
 		} else {
 			logger.Log().Error("This Topic is not registered", logger.StringField("topic", k))
 		}
@@ -290,7 +314,11 @@ func (s *Service) registerSubscriber(subscriber serviceutils.SubscriptionInterfa
 			m := reflect.ValueOf(subscriber).MethodByName(v.(string))
 			mCallable := m.Interface().(func(msg *nats.Msg))
 			// Subscribe to the topic with the corresponding method
-			serviceutils.GetInstance().GetNats().QueueSubscribe(k, configmanager.GetInstance().ClassName, mCallable)
+			if queueName != "" {
+				serviceutils.GetInstance().GetNats().QueueSubscribe(k, queueName, mCallable)
+			} else {
+				serviceutils.GetInstance().GetNats().Subscribe(k, mCallable)
+			}
 		} else {
 			logger.Log().Error("This Topic is not registered", logger.StringField("topic", k))
 		}

@@ -277,8 +277,14 @@ type config struct {
 	MetricsPort string `json:"metricsPort"`
 
 	// JaegerEndpoint is the Jaeger collector URL for OpenTelemetry traces.
+	// Only used when UseTracing is true.
 	// [OPTIONAL]
 	JaegerEndpoint string `json:"jaegerEndpoint"`
+
+	// UseTracing enables OpenTelemetry export to Jaeger. When false, tracing is
+	// not initialized and no spans are exported.
+	// [OPTIONAL — default false; set true or provide jaegerEndpoint to enable]
+	UseTracing bool `json:"useTracing"`
 
 	// UsePprof enables the Go pprof profiling HTTP endpoints.
 	// [OPTIONAL — default false]
@@ -397,6 +403,7 @@ func (c *config) LoadFromBytes(globalJSON, serviceJSON []byte) error {
 
 	// Environment variables take the highest precedence.
 	c.loadSecretsFromEnv()
+	c.finalizeTracingConfig()
 	return nil
 }
 
@@ -540,8 +547,11 @@ func (c *config) loadFromSystemEnv() {
 	}
 	if envVal := os.Getenv("JAEGER_ENDPOINT"); envVal != "" {
 		c.JaegerEndpoint = envVal
-	} else if c.JaegerEndpoint == "" {
-		c.JaegerEndpoint = "http://localhost:14268/api/traces"
+	}
+	if envVal := os.Getenv("USE_TRACING"); envVal != "" {
+		if useTracing, err := strconv.ParseBool(envVal); err == nil {
+			c.UseTracing = useTracing
+		}
 	}
 	if envVal := os.Getenv("SMTP_CLIENT"); envVal != "" {
 		c.Email.SMPTClient = envVal
@@ -573,6 +583,29 @@ func (c *config) loadFromSystemEnv() {
 	}
 	if envVal := os.Getenv("MEILI_API_KEY"); envVal != "" {
 		c.MeilisearchConfig.ApiKey = envVal
+	}
+}
+
+// finalizeTracingConfig resolves whether tracing is enabled and applies defaults.
+// Tracing is off unless useTracing is true in config/env, or a jaegerEndpoint is
+// configured without an explicit useTracing:false. Set USE_TRACING=false to disable.
+func (c *config) finalizeTracingConfig() {
+	if _, explicit := c.raw["useTracing"]; explicit {
+		if !c.UseTracing {
+			return
+		}
+	} else if os.Getenv("USE_TRACING") == "false" {
+		return
+	} else if !c.UseTracing {
+		if c.JaegerEndpoint != "" {
+			c.UseTracing = true
+		} else {
+			return
+		}
+	}
+
+	if c.UseTracing && c.JaegerEndpoint == "" {
+		c.JaegerEndpoint = "http://localhost:14268/api/traces"
 	}
 }
 
@@ -648,6 +681,8 @@ func (c *config) setup(configFileName, path, serviceName, workingDir string) {
 
 	// Environment variable overrides (highest priority).
 	c.loadSecretsFromEnv()
+
+	c.finalizeTracingConfig()
 
 	// When no config file (or env var) set DeploymentEnv, fall back to the
 	// environment identifier used to select the config file (e.g. "DEV", "PROD").

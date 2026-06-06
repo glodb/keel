@@ -55,10 +55,12 @@ func Boot(env, service string) (err error) {
 		}
 	}
 
-	// Initialize tracing with panic recovery.
-	panicrecovery.SafeGo(func() {
-		tracing.GetInstance()
-	}, "tracing initialization")
+	// Initialize tracing when enabled.
+	if configmanager.GetInstance().UseTracing {
+		panicrecovery.SafeGo(func() {
+			tracing.GetInstance()
+		}, "tracing initialization")
+	}
 
 	if configmanager.GetInstance().UsePprof {
 		mux := http.NewServeMux()

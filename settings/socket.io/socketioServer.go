@@ -22,6 +22,7 @@ import (
 type SocketIO struct {
 	address              string
 	server               *socketio.Server
+	serveOnce            sync.Once
 	onError              func(c *SocketSession, err error)
 	onNewSessionCallback func(c *SocketSession)
 	onSessionDisconnect  func(c *SocketSession, reason string)
@@ -87,7 +88,9 @@ func (s *SocketIO) Handler() http.Handler {
 	if s.server == nil {
 		s.build()
 	}
-	go s.server.Serve()
+	s.serveOnce.Do(func() {
+		go s.server.Serve()
+	})
 	return s.server
 }
 
@@ -142,10 +145,12 @@ func (s *SocketIO) RegisterEvent(name string, handler func(c *SocketSession, dat
 		s.events = make(map[string]interface{})
 	}
 	s.events[name] = func(sock socketio.Conn, data string) {
-		var session *SocketSession
-		if sock.Context() != nil {
-			session = sock.Context().(*SocketSession)
+		if sock.Context() == nil {
+			logger.Log().Error("socket event received before session context was set",
+				logger.StringField("event", name))
+			return
 		}
+		session := sock.Context().(*SocketSession)
 		handler(session, data)
 	}
 }

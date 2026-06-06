@@ -3,6 +3,7 @@ package notificationsettings
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"strconv"
 	"strings"
 
@@ -37,13 +38,15 @@ func (u *EmailSender) Init(semaphore *semaphore.Weighted) (bool, error) {
 	if err != nil {
 		return false, err
 	}
+	host := configmanager.GetInstance().Email.SMPTClient
 	u.dialer = &gomail.Dialer{
-		Host:     configmanager.GetInstance().Email.SMPTClient,
+		Host:     host,
 		Port:     portToInt,
 		Username: configmanager.GetInstance().Email.EmailAddress,
 		Password: configmanager.GetInstance().Email.Password,
 		SSL:      configmanager.GetInstance().Email.IsTLS,
 		TLSConfig: &tls.Config{
+			ServerName:         host,
 			InsecureSkipVerify: configmanager.GetInstance().Email.InsecureSkipVerify,
 		},
 	}
@@ -67,6 +70,10 @@ func (u *EmailSender) reconnect() error {
 }
 
 func (u *EmailSender) Send(notifications []notificationmodels.NotiResponseModels) error {
+	if u.sender == nil {
+		return errors.New("email sender is not connected")
+	}
+
 	u.semaphore.Acquire(context.Background(), 1)
 	defer u.semaphore.Release(1)
 
@@ -102,6 +109,10 @@ func (u *EmailSender) Send(notifications []notificationmodels.NotiResponseModels
 }
 
 func (u *EmailSender) MultiCastMessage(notification notificationmodels.NotiResponseModels) error {
+	if u.sender == nil {
+		return errors.New("email sender is not connected")
+	}
+
 	u.semaphore.Acquire(context.Background(), 1)
 	defer u.semaphore.Release(1)
 
@@ -150,5 +161,5 @@ func (u *EmailSender) Enable() error {
 }
 
 func (u *EmailSender) IsInitialized() bool {
-	return u.initialised
+	return u.initialised && u.sender != nil
 }

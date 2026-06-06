@@ -66,6 +66,7 @@ func Example_register() {
 		service.SERVICE_TYPE_HTTP|service.SERVICE_TYPE_SOCKET|service.SERVICE_TYPE_SIMPLE,
 		nil,
 		nil,
+		false,
 	)
 }
 
