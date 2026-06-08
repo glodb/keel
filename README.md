@@ -180,3 +180,12 @@ Importing `github.com/glodb/keel` pulls in the full dependency set (Mongo, MySQL
 ## Ops / Docker reference
 
 See [docs/ops.md](docs/ops.md) for Docker run commands and deployment notes.
+
+## Frequently asked questions
+
+**Why Gin?** Stable, well-tested HTTP routing. 
+Making it optional is planned for v0.2.
+
+**Why init() registration?** Zero boilerplate 
+for the common case. Constructor pattern 
+(keel.New()) is in progress for v0.2.
